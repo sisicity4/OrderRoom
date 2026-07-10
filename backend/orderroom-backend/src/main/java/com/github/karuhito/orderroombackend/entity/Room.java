@@ -4,9 +4,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.Id;
 import jakarta.persistence.Column;
+
 import java.util.UUID;
 import java.time.LocalDate;
 import java.time.Instant;
+
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
@@ -16,16 +18,18 @@ import org.hibernate.generator.EventType;
 public class Room {
     @Id
     @Generated(event = EventType.INSERT)
-    @Column(name = "id",
-     nullable = false,
-     updatable = false,
-     columnDefinition = "uuid DEFAULT gen_random_uuid()"
+    @Column(
+        name = "id",
+        nullable = false,
+        updatable = false,
+        columnDefinition = "uuid DEFAULT gen_random_uuid()"
     )
     private UUID id;
 
-    @Column(name = "title",
-     length = 100,
-     nullable = false
+    @Column(
+        name = "title",
+        length = 100,
+        nullable = false
     )
     private String title;
 
@@ -36,19 +40,20 @@ public class Room {
     private String memo;
 
     @Generated(event = EventType.INSERT)
-    @Column(name = "host_key",
-     nullable = false,
-     unique = true,
-     updatable = false,
-     columnDefinition = "uuid DEFAULT gen_random_uuid()"
+    @Column(
+        name = "host_key",
+        nullable = false,
+        unique = true,
+        updatable = false,columnDefinition = "uuid DEFAULT gen_random_uuid()"
     )
     private UUID hostKey;
 
     @Generated(event = EventType.INSERT)
-    @Column( name = "created_at",
-     nullable = false,
-     updatable = false,
-     columnDefinition = "timestamptz DEFAULT now()"
+    @Column(
+        name = "created_at",
+        nullable = false,
+        updatable = false,
+        columnDefinition = "timestamptz DEFAULT now()"
     )
     private Instant createdAt;
     /**
@@ -93,6 +98,7 @@ public class Room {
     }
 
     // setter: title | eventDate | memo
+
     public void setTitle(String title) {
         this.title = title;
     }
