@@ -73,3 +73,39 @@
     - 合計金額
 
 ---
+
+## バックエンドの起動方法
+
+### 前提
+
+- Java 21
+- Neon（PostgreSQL）の接続情報（`DB_URL` / `DB_USER` / `DB_PASSWORD`）
+
+### 1. 環境変数の設定
+
+`backend/orderroom-backend/` で、Neonの接続情報を環境変数として設定します。
+
+```bash
+export DB_URL="jdbc:postgresql://<Neonのホスト>/<DB名>?sslmode=require"
+export DB_USER="<ユーザー名>"
+export DB_PASSWORD='<パスワード>'
+```
+
+### 2. 起動
+
+```bash
+cd backend/orderroom-backend
+./mvnw spring-boot:run
+```
+
+`Tomcat started on port 8080` と表示されれば起動成功です。
+
+### 3. 動作確認
+
+```bash
+curl -i http://localhost:8080/api/health
+```
+
+`{"status":"OK"}` が返れば正常です。
+
+---
