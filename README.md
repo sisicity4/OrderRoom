@@ -81,14 +81,15 @@
 - Java 21
 - Neon（PostgreSQL）の接続情報（`DB_URL` / `DB_USER` / `DB_PASSWORD`）
 
-### 1. 環境変数の設定
+### 1. 接続情報の設定（.env）
 
-`backend/orderroom-backend/` で、Neonの接続情報を環境変数として設定します。
+`backend/orderroom-backend/.env` を作成し、Neonの接続情報を記述します（`.env` はGit管理外）。
+値はクォートで囲まず、`export` も不要です（アプリ起動時に自動で読み込まれます）。
 
-```bash
-export DB_URL="jdbc:postgresql://<Neonのホスト>/<DB名>?sslmode=require"
-export DB_USER="<ユーザー名>"
-export DB_PASSWORD='<パスワード>'
+```dotenv
+DB_URL=jdbc:postgresql://<Neonのホスト>/<DB名>?sslmode=require
+DB_USER=<ユーザー名>
+DB_PASSWORD=<パスワード>
 ```
 
 ### 2. 起動
