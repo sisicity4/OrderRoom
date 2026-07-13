@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record CreateRoomRequest(
-    @NotBlank
+    @NotBlank(message = "空白は許可されていません")
     @Size(max = 100)
     String title,
 
