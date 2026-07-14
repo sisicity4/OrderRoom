@@ -46,6 +46,7 @@ public class Participant {
         name = "token",
         nullable = false,
         updatable = false,
+        unique = true,
         columnDefinition = "uuid DEFAULT gen_random_uuid()"
     )
     private UUID token;
