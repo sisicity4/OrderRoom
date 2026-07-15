@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public record CreateParticipantResponse(
     UUID id,
-    UUID roomId, //getRoom().getId()
+    UUID roomId,
     String name,
     UUID token,
     Instant createdAt
