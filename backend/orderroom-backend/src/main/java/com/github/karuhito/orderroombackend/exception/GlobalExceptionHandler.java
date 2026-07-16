@@ -42,7 +42,7 @@ public class GlobalExceptionHandler {
         
         @ExceptionHandler(ParticipantNotFoundException.class)
         public ResponseEntity<ErrorResponse> participantNotFoundException(ParticipantNotFoundException ex) {
-            ErrorResponse response = new ErrorResponse("PARTICIPANT_NOT_FOUND", "参加者が見つかりません", null);
+            ErrorResponse response = new ErrorResponse("PARTICIPANT_NOT_FOUND", "参加者IDが正しくありません", null);
             return ResponseEntity.status(404).body(response);
         }
 }
