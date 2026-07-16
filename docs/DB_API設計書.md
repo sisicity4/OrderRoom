@@ -239,12 +239,12 @@ GROUP BY name ORDER BY total_quantity DESC;
 
 ### ステータスコード
 
-| コード | 用途 |
-| --- | --- |
-| 200 / 201 / 204 | 取得・更新 / 作成 / 削除成功 |
-| 400 | バリデーションエラー / 不正なstatus |
-| 403 | host_key・token 不正、他人の提案を操作 |
-| 404 | ルーム・アイテム不存在 |
+| コード | 用途 | レスポンス(errorの値) |
+| --- | --- | --- |
+| 200 / 201 / 204 | 取得・更新 / 作成 / 削除成功 | エラーではないので空欄 | 
+| 400 | バリデーションエラー / 不正なstatus | `VALID_ERROR`（Bean Validation）、`TYPE_MISMATCH`（パスパラメータの型不正、今回追加分） |
+| 403 | host_key・token 不正、他人の提案を操作 | `FORBIDDEN`（既存のエラーレスポンス形式の例（§4の`{"error": "FORBIDDEN", ...}`）で使われている値。ただし403系はissue#13/#33でまだ未実装なので、あくまで設計上の予定値 |
+| 404 | ルーム・アイテム不存在 ("RoomまたはItem Not Found"のようなメッセージ)| `ROOM_NOT_FOUND`（今回実装済み）、`ITEM_NOT_FOUND`（issueとしてはまだ未実装。itemsのAPIは今後の話）|
 
 ### バリデーション（issue #17）
 
