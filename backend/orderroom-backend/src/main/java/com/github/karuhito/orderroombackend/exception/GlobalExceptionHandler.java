@@ -38,5 +38,11 @@ public class GlobalExceptionHandler {
 
             ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
             return ResponseEntity.status(400).body(response);
-        } 
+        }
+        
+        @ExceptionHandler(ParticipantNotFoundException.class)
+        public ResponseEntity<ErrorResponse> participantNotFoundException(ParticipantNotFoundException ex) {
+            ErrorResponse response = new ErrorResponse("PARTICIPANT_NOT_FOUND", "参加者IDが正しくありません", null);
+            return ResponseEntity.status(404).body(response);
+        }
 }
