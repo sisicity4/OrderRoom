@@ -17,6 +17,6 @@ public record ItemListResponse(
     ItemStatus status,
     boolean purchased,
     Instant createdAt,
-    Instant UpdatedAt
+    Instant updatedAt
 ) {
 }
