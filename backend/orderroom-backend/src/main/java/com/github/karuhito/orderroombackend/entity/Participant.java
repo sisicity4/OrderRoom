@@ -41,10 +41,15 @@ public class Participant {
     )
     private String name;
 
-    /**
-     * issue#33でtokenカラム追加予定(本人確認用の秘密値)
-     * UUID | NOT NULL | UNIQUE | DEFAULT gen_random_uuid()
-     */
+    @Generated
+    @Column(
+        name = "token",
+        nullable = false,
+        updatable = false,
+        unique = true,
+        columnDefinition = "uuid DEFAULT gen_random_uuid()"
+    )
+    private UUID token;
 
     @Generated(event = EventType.INSERT)
     @Column(
@@ -66,7 +71,7 @@ public class Participant {
         this.name = name;
     }
 
-    //getter: id | room_id | name | created_at | 後にtokenも記述
+    //getter: id | room_id | name | created_at | token
     public UUID getId() {
         return id;
     }
@@ -81,6 +86,10 @@ public class Participant {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public UUID getToken() {
+        return token;
     }
 
     // setterなし: nameを編集するAPIは現状存在しないため、意図的に未実装(コンストラクタでのみ設定)

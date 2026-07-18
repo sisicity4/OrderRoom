@@ -179,20 +179,54 @@ stateDiagram-v2
 | 不存在 | 404 |
 | 状態競合 | 409 |
 
-エラーレスポンス:
+エラーレスポンスは、現在の `ErrorResponse` に合わせて次の形へ統一する。
 
 ```json
 {
-  "code": "VALIDATION_ERROR",
-  "message": "入力内容を確認してください",
+  "error": "VALID_ERROR",
+  "message": "不正な入力です",
   "fields": {
     "budgetAmount": "0以上で入力してください"
-  },
-  "timestamp": "2026-07-18T12:00:00Z"
+  }
 }
 ```
 
 秘密値、SQL、スタックトレースをレスポンスへ含めない。
+
+### 5.1 エラー識別子
+
+| HTTP | `error` | 状態 | 用途 |
+| --- | --- | --- | --- |
+| 400 | `VALID_ERROR` | 実装済み | Bean Validation失敗 |
+| 400 | `TYPE_MISMATCH` | 実装済み | roomIdなどの型不正 |
+| 403 | `FORBIDDEN` | 未実装 | token、hostKey、操作権限の不一致 |
+| 404 | `ROOM_NOT_FOUND` | 実装済み | ルーム不存在 |
+| 404 | `PARTICIPANT_NOT_FOUND` | 実装済み | 参加者不存在、または別ルームの参加者 |
+| 404 | `ITEM_NOT_FOUND` | 未実装 | 商品不存在 |
+| 409 | `CONFLICT` | 未実装 | 精算済みなど、現在状態と操作の競合 |
+
+### 5.2 バリデーション
+
+| 対象 | ルール |
+| --- | --- |
+| 参加者名 | 必須・空文字不可・最大50文字 |
+| 商品名 | 必須・空文字不可・最大100文字 |
+| 見積単価 | 必須・0以上の整数 |
+| 数量 | 必須・1以上の整数 |
+| 商品メモ | 最大255文字 |
+| roomId | UUID形式。不正なら400、不存在なら404 |
+| participantId | 同じroomに存在しなければ404 |
+| hostKey / token | 不一致は403 |
+
+### 5.3 dev統合時点の実装差分
+
+2026-07-18に統合した実装では、参加者登録と商品作成が追加されている。確定仕様へ到達するまで、次の差分を残課題として扱う。
+
+- `POST /api/rooms/{roomId}/participants` は201、token発行、400、404まで実装済み
+- `POST /api/rooms/{roomId}/items` は201、入力検証、room・participant所属確認まで実装済み
+- 商品作成は現在 `participantId` を本文で受け取る。確定仕様では `X-Participant-Token` から提案者を決定する
+- ItemStatusは現在JSONで `PROPOSED` と返る。確定API値は小文字の `proposed`
+- 参加・商品ControllerテストはNeon接続設定を使うため、外部DBなしで実行できるテスト環境は引き続き必要
 
 ## 6. エンドポイント一覧
 

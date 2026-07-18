@@ -109,12 +109,28 @@ public class Item {
      * コンストラクタ
      */
 
-    public Item() {}
+    public Item() {
+        this.status = ItemStatus.PROPOSED;
+        this.purchased = false;
+    }
 
     public Item(Room room, Participant participant, String name) {
         this.room = room;
         this.participant = participant;
         this.name = name;
+        this.status = ItemStatus.PROPOSED;
+        this.purchased = false;
+    }
+
+    public Item(Room room, Participant participant, String name, int price, int quantity, String memo) {
+        this.room = room;
+        this.participant = participant;
+        this.name = name;
+        this.price = price;
+        this.quantity = quantity;
+        this.memo = memo;
+        this.status = ItemStatus.PROPOSED;
+        this.purchased = false;
     }
 
     /*  getter: id | room_id | participant_id | name | price | quantity | memo | status | created_at | updated_at
