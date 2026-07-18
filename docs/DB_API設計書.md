@@ -1,452 +1,552 @@
-# オーダールーム 設計書（テーブル設計 → API設計）
+# OrderRoom DB・API設計書
 
-対象: MVP（提案 → 採用 → 買い物リスト → 合計金額表示）
-スタック: React + TypeScript / Spring Boot / PostgreSQL / REST(JSON)
-デプロイ構成: フロント=Vercel / API=Render / **DB=Neon（PostgreSQL）**
-準拠: BE ラベル issue #4〜#17 ＋ 未確認部分の追加設計（§5・§8で明記）
+更新日: 2026-07-18
 
----
+対象: [MVP仕様](MVP.md)で定義したコア版と統合MVP  
+構成: React + TypeScript / Spring Boot / PostgreSQL / REST JSON
 
-## 0. 設計方針・前提
+この資料はテーブル、API、認証、集計、精算計算、デプロイ技術仕様を管理する。MVP範囲、期限、実装順は[ロードマップ](%E3%83%AD%E3%83%BC%E3%83%89%E3%83%9E%E3%83%83%E3%83%97.md)を優先する。
 
-| 項目 | 決定 | 理由 |
-| --- | --- | --- |
-| 主キー | UUID | 参加URL・ホスト管理URLにIDを載せるため、連番だと他ルームを推測できてしまう |
-| ホスト権限 | `host_key`（UUID）を別発行し `X-Host-Key` ヘッダで送る | ログインを作らずに採用/却下/購入チェックを制御する（issue #13） |
-| 参加者の本人性 | 参加時に発行する秘密値 `token` を `X-Participant-Token` ヘッダで送る | 一覧に出る `participantId` と分離し、他人の提案編集を防ぐ（§8 で追加設計） |
-| 金額 | 円想定で `INTEGER` | 日本円は小数なし。小数対応が必要になれば `NUMERIC` に変更 |
-| 集計 | 保存しない（SQLで都度計算） | issue #16。提案データが唯一の正 |
-| 集計対象 | **採用（accepted）と提案中（pending）を両方返す** | 提案フェーズ・確定後のどちらの画面でも使えるようにする（§8-1） |
-| DB | Neon（サーバーレスPostgreSQL） | 無料枠・SSL必須・Pooler利用。DDLはそのまま流用可 |
-| リアルタイム | なし（画面表示時／更新時に再取得） | MVP非スコープ |
+## 1. 設計原則
 
-> セキュリティ強度は「イベント中に使いやすい」ことを優先した割り切り。強化案は §10 に記載。
+| 項目 | 決定 |
+| --- | --- |
+| ID | UUID。参加URLから連番を推測させない |
+| API形式 | `/api`配下のREST JSON |
+| 参加者本人確認 | 参加時にtokenを発行し、`X-Participant-Token`で送る |
+| ホスト確認 | ルーム作成時にhostKeyを発行し、`X-Host-Key`で送る |
+| 金額 | 日本円の整数。負値を許可しない |
+| 商品状態 | `proposed / accepted / rejected` |
+| 集計 | 見積と精算結果は計算し、重複保存しない |
+| 見送り | 削除せず保持し、通常一覧と集計から除外する |
+| 同期 | 手動更新で再取得する |
+| DB | Neon PostgreSQL |
 
----
+### 名前の固定
 
-## 1. ER図
+- 日付はAPIで `eventDate`、DBで `event_date`
+- ホスト秘密値はAPIで `hostKey`、DBで `host_key`
+- 参加者秘密値は `token`
+- 提案中は `proposed`。`pending`は使用しない
+- UIの「見送り」に対応するAPI値は `rejected`
+- `price`は見積単価、`actualPrice`は商品行全体の実購入額
+
+## 2. データモデル
 
 ```mermaid
 erDiagram
     rooms ||--o{ participants : has
     rooms ||--o{ items : has
     participants ||--o{ items : proposes
-
-    rooms {
-        uuid id PK
-        varchar title
-        date event_date
-        text memo
-        uuid host_key
-        timestamptz created_at
-    }
-    participants {
-        uuid id PK
-        uuid room_id FK
-        varchar name
-        uuid token
-        timestamptz created_at
-    }
-    items {
-        uuid id PK
-        uuid room_id FK
-        uuid participant_id FK
-        varchar name
-        int price
-        int quantity
-        text memo
-        varchar status
-        boolean purchased
-        timestamptz created_at
-        timestamptz updated_at
-    }
+    participants ||--o{ items : pays
+    rooms ||--o{ settlement_members : selects
+    participants ||--o{ settlement_members : included
+    rooms ||--o{ settlements : has
+    participants ||--o{ settlements : pays
+    participants ||--o{ settlements : receives
 ```
 
----
-
-## 2. テーブル設計
-
-### 2.1 rooms（ルーム）— issue #6
+### 2.1 rooms
 
 | カラム | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
-| id | UUID | PK, default gen_random_uuid() | ルームID。参加URLに含める |
-| title | VARCHAR(100) | NOT NULL | イベント名 |
-| event_date | DATE | NULL可 | 開催日（issue案の `date` は予約語のため `event_date`） |
-| memo | TEXT | NULL可 | メモ |
-| host_key | UUID | NOT NULL, UNIQUE, default gen_random_uuid() | ホスト管理URL用の秘密キー |
-| created_at | TIMESTAMPTZ | NOT NULL, default now() | 作成日時 |
+| `id` | UUID | PK | ルームID |
+| `title` | VARCHAR(100) | NOT NULL | イベント名 |
+| `event_date` | DATE | NULL可 | 開催日 |
+| `memo` | TEXT | NULL可 | メモ |
+| `budget_amount` | INTEGER | NULL可、0以上 | 予算上限。NULLなら予算表示なし |
+| `host_key` | UUID | NOT NULL、UNIQUE | ホスト秘密値 |
+| `created_at` | TIMESTAMPTZ | NOT NULL | 作成日時 |
 
-### 2.2 participants（参加者）— issue #7（＋token 追加）
-
-| カラム | 型 | 制約 | 説明 |
-| --- | --- | --- | --- |
-| id | UUID | PK | 参加者ID（**一覧APIに出る公開ID**） |
-| room_id | UUID | NOT NULL, FK→rooms(id) ON DELETE CASCADE | 所属ルーム |
-| name | VARCHAR(50) | NOT NULL | 表示名（空文字不可） |
-| token | UUID | NOT NULL, UNIQUE, default gen_random_uuid() | **本人確認用の秘密値。参加時に一度だけ返し、一覧では返さない** |
-| created_at | TIMESTAMPTZ | NOT NULL, default now() | 参加日時 |
-
-> `token` は issue #7 のカラム案に無い追加分。アイテムの編集/削除で提案者本人を確認するために使う（§8-3）。この機能はMVPに含める前提。
-
-### 2.3 items（提案アイテム）— issue #8
+### 2.2 participants
 
 | カラム | 型 | 制約 | 説明 |
 | --- | --- | --- | --- |
-| id | UUID | PK | アイテムID |
-| room_id | UUID | NOT NULL, FK→rooms(id) ON DELETE CASCADE | 所属ルーム |
-| participant_id | UUID | NOT NULL, FK→participants(id) ON DELETE CASCADE | 提案者 |
-| name | VARCHAR(100) | NOT NULL | 商品名 |
-| price | INTEGER | NOT NULL default 0, CHECK(price>=0) | 単価（円） |
-| quantity | INTEGER | NOT NULL default 1, CHECK(quantity>=1) | 数量 |
-| memo | TEXT | NULL可 | メモ |
-| status | VARCHAR(20) | NOT NULL default 'proposed', CHECK(IN) | proposed / accepted / rejected |
-| purchased | BOOLEAN | NOT NULL default false | 購入済みチェック |
-| created_at | TIMESTAMPTZ | NOT NULL, default now() | 作成日時 |
-| updated_at | TIMESTAMPTZ | NOT NULL, default now() | 更新日時 |
+| `id` | UUID | PK | 公開可能な参加者ID |
+| `room_id` | UUID | FK、NOT NULL | 所属ルーム |
+| `name` | VARCHAR(50) | NOT NULL | 表示名 |
+| `token` | UUID | NOT NULL、UNIQUE | 本人確認用。参加時以外は返さない |
+| `created_at` | TIMESTAMPTZ | NOT NULL | 参加順の判定にも使う |
 
-#### status の値
+### 2.3 items
 
-| 値 | 意味 |
-| --- | --- |
-| proposed | 提案中（初期値） |
-| accepted | 採用（買い物リストに載る） |
-| rejected | 却下 |
+| カラム | 型 | 制約 | 説明 |
+| --- | --- | --- | --- |
+| `id` | UUID | PK | 商品ID |
+| `room_id` | UUID | FK、NOT NULL | 所属ルーム |
+| `participant_id` | UUID | FK、NOT NULL | 提案者 |
+| `name` | VARCHAR(100) | NOT NULL | 商品名 |
+| `price` | INTEGER | NOT NULL、0以上、default 0 | 見積単価 |
+| `quantity` | INTEGER | NOT NULL、1以上、default 1 | 数量 |
+| `memo` | TEXT | NULL可 | メモ |
+| `status` | VARCHAR(20) | NOT NULL、default proposed | proposed / accepted / rejected |
+| `purchased` | BOOLEAN | NOT NULL、default false | 購入済み |
+| `actual_price` | INTEGER | NULL可、0以上 | 商品行全体の実購入額 |
+| `paid_by_participant_id` | UUID | FK、NULL可 | 購入者 |
+| `created_at` | TIMESTAMPTZ | NOT NULL | 作成日時 |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | 更新日時 |
 
-> `purchased` は `status = 'accepted'` のときだけ意味を持つ。
+制約:
 
-### 2.4 DDL（PostgreSQL / Neon）
+- purchasedはacceptedだけtrueにできる
+- actual_priceとpaid_by_participant_idは、acceptedかつpurchasedの商品だけに設定できる
+- paid_by_participant_idは同じroomの参加者でなければならない
+- actual_priceとpaid_by_participant_idは両方入力または両方NULLにする
 
-```sql
--- gen_random_uuid() は PostgreSQL 13+ 標準。Neonは対応済み
+### 2.4 settlement_members
 
-CREATE TABLE rooms (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title       VARCHAR(100) NOT NULL,
-    event_date  DATE,
-    memo        TEXT,
-    host_key    UUID NOT NULL DEFAULT gen_random_uuid(),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE UNIQUE INDEX idx_rooms_host_key ON rooms (host_key);
+精算対象に含める参加者だけを保存する。
 
-CREATE TABLE participants (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    room_id     UUID NOT NULL REFERENCES rooms (id) ON DELETE CASCADE,
-    name        VARCHAR(50) NOT NULL,
-    token       UUID NOT NULL DEFAULT gen_random_uuid(),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX        idx_participants_room_id ON participants (room_id);
-CREATE UNIQUE INDEX idx_participants_token   ON participants (token);
+| カラム | 型 | 制約 | 説明 |
+| --- | --- | --- | --- |
+| `room_id` | UUID | FK、複合PK | ルーム |
+| `participant_id` | UUID | FK、複合PK | 精算対象者 |
+| `created_at` | TIMESTAMPTZ | NOT NULL | 登録日時 |
 
-CREATE TABLE items (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    room_id        UUID NOT NULL REFERENCES rooms (id) ON DELETE CASCADE,
-    participant_id UUID NOT NULL REFERENCES participants (id) ON DELETE CASCADE,
-    name           VARCHAR(100) NOT NULL,
-    price          INTEGER NOT NULL DEFAULT 0 CHECK (price >= 0),
-    quantity       INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
-    memo           TEXT,
-    status         VARCHAR(20) NOT NULL DEFAULT 'proposed'
-                     CHECK (status IN ('proposed', 'accepted', 'rejected')),
-    purchased      BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_items_room_id        ON items (room_id);
-CREATE INDEX idx_items_room_status    ON items (room_id, status);
-CREATE INDEX idx_items_participant_id ON items (participant_id);
+初回計算時に未設定なら全参加者を対象とする。対象者0人は許可しない。
 
--- updated_at 自動更新（アプリ側 @PreUpdate で行うなら不要）
-CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+### 2.5 settlements
 
-CREATE TRIGGER trg_items_updated_at
-    BEFORE UPDATE ON items
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+送金案を精算状態付きで保持する。負担額や立替額そのものは保存せず、計算時に返す。
+
+| カラム | 型 | 制約 | 説明 |
+| --- | --- | --- | --- |
+| `id` | UUID | PK | 精算ID |
+| `room_id` | UUID | FK、NOT NULL | ルーム |
+| `from_participant_id` | UUID | FK、NOT NULL | 支払側 |
+| `to_participant_id` | UUID | FK、NOT NULL | 受取側 |
+| `amount` | INTEGER | NOT NULL、1以上 | 送金額 |
+| `settled_at` | TIMESTAMPTZ | NULL可 | 精算済み日時 |
+| `created_at` | TIMESTAMPTZ | NOT NULL | 計算結果作成日時 |
+
+同じ参加者をfromとtoへ設定しない。精算再計算時は未精算の送金案を置き換える。
+
+## 3. 状態遷移
+
+```mermaid
+stateDiagram-v2
+    [*] --> proposed
+    proposed --> accepted: ホストが採用
+    proposed --> rejected: ホストが見送り
+    accepted --> proposed: 参加者が内容編集
+    accepted --> rejected: ホストが見送り
+    rejected --> proposed: ホストが再検討
+    rejected --> accepted: ホストが採用
 ```
 
-### 2.5 Neon 接続設定（issue #5）
+- status変更はホストだけが行う
+- 参加者によるaccepted商品の編集は自動でproposedへ戻し、purchasedをfalseにする
+- ホスト編集はacceptedを維持できる
+- rejectedは物理削除しない
+- purchasedをfalseへ戻す場合はactualPriceと購入者もクリアする
+- actualPriceが精算計算へ使用された後でも、精算済みが0件なら変更して再計算できる
+- 精算済みが1件以上ある場合、商品編集、削除、status変更、purchased変更、購入詳細変更を409で拒否する
 
-Neonはサーバーレスのため、**SSL必須**＋**Pooler付きエンドポイント**の利用が基本。接続情報は環境変数で渡し、リポジトリにコミットしない。
+## 4. 認証と秘密値
 
-```yaml
-spring:
-  datasource:
-    # Neonダッシュボードの "Pooled connection" のホスト名（-pooler付き）を使う
-    url: ${DATABASE_URL}   # 例: jdbc:postgresql://<ep>-pooler.<region>.neon.tech/<db>?sslmode=require
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
-    hikari:
-      maximum-pool-size: 5     # 無料枠の接続上限とぶつからないよう小さめに
-  jpa:
-    hibernate:
-      ddl-auto: validate       # 本番はvalidate。スキーマはFlyway/Liquibaseで管理
-```
+### 4.1 参加者token
 
-- 開発用と本番用でNeonの**ブランチ**を分けると、同じマイグレーションを両方に適用しやすい。
-- マイグレーションは Flyway 推奨（§2.4 のDDLを `V1__init.sql` 等で管理）。
+- 参加APIの成功時に一度だけ返す
+- FEは `orderroom.participantToken.{roomId}` のようにroom単位でlocalStorageへ保存する
+- 商品作成、編集、削除、参加者本人の精算済み操作で送る
+- 一覧APIやエラーログへ出さない
+- リクエスト本文のparticipantIdを本人確認に使わない
 
----
+### 4.2 hostKey
 
-## 3. 集計（保存せずSQLで計算）— issue #16 ＋ §8-1
+- ルーム作成APIの成功時に一度だけ返す
+- FEはホストURLのkeyをsessionStorageへ移し、可能ならURLから除去する
+- ホスト操作では `X-Host-Key` を送る
+- 通常のルーム取得、参加、一覧レスポンスへ含めない
 
-`items` から算出。**採用（accepted）と提案中（proposed）の両方**を返す。却下（rejected）は金額集計から除外。
+### 4.3 エラー
 
-```sql
--- 全体の合計金額（採用 / 提案中）
-SELECT
-  COALESCE(SUM(CASE WHEN status='accepted' THEN price*quantity END),0) AS accepted_total_price,
-  COALESCE(SUM(CASE WHEN status='proposed' THEN price*quantity END),0) AS pending_total_price
-FROM items WHERE room_id = :roomId;
+- tokenまたはhostKeyの欠如・不一致: 403
+- ルーム、参加者、商品、精算の不存在: 404
+- 他ルームのIDを組み合わせた操作: 404または403で統一し、存在確認へ利用できないようにする
 
--- ステータス別の件数
-SELECT status, COUNT(*) FROM items WHERE room_id = :roomId GROUP BY status;
-
--- 個人別（提案数 / 採用合計 / 提案中合計）
-SELECT p.id, p.name,
-       COUNT(i.id)                                                          AS proposal_count,
-       COALESCE(SUM(CASE WHEN i.status='accepted' THEN i.price*i.quantity END),0) AS accepted_total_price,
-       COALESCE(SUM(CASE WHEN i.status='proposed' THEN i.price*i.quantity END),0) AS pending_total_price
-FROM participants p
-LEFT JOIN items i ON i.participant_id = p.id
-WHERE p.room_id = :roomId
-GROUP BY p.id, p.name
-ORDER BY p.created_at;
-
--- 商品名ごとの合計数量・金額（採用のみ＝買い物リストの数量）
-SELECT name, SUM(quantity) AS total_quantity, SUM(price*quantity) AS total_price
-FROM items WHERE room_id = :roomId AND status='accepted'
-GROUP BY name ORDER BY total_quantity DESC;
-```
-
----
-
-## 4. API共通仕様
+## 5. API共通仕様
 
 | 項目 | 内容 |
 | --- | --- |
-| ベースパス | `/api` |
-| 形式 | JSON（UTF-8） |
-| ホスト認証（issue #13） | ヘッダ `X-Host-Key: <host_key>`。不一致/欠如は 403 |
-| 参加者認証（§8-3） | ヘッダ `X-Participant-Token: <token>`（自分の提案の編集/削除時）。不一致は 403 |
-| 日時 | ISO 8601 |
+| Base path | `/api` |
+| Content-Type | `application/json; charset=UTF-8` |
+| 日付 | `YYYY-MM-DD` |
+| 日時 | ISO 8601 UTC |
+| 成功 | 200、201、204 |
+| 入力不正 | 400 |
+| 権限不足 | 403 |
+| 不存在 | 404 |
+| 状態競合 | 409 |
 
-### ステータスコード
+エラーレスポンス:
 
-| コード | 用途 |
-| --- | --- |
-| 200 / 201 / 204 | 取得・更新 / 作成 / 削除成功 |
-| 400 | バリデーションエラー / 不正なstatus |
-| 403 | host_key・token 不正、他人の提案を操作 |
-| 404 | ルーム・アイテム不存在 |
-
-### バリデーション（issue #17）
-
-| 対象 | ルール |
-| --- | --- |
-| 参加者名 | 必須・空文字不可・最大50文字 |
-| 商品名 | 必須・空文字不可・最大100文字 |
-| 価格 | 0以上の整数 |
-| 数量 | 1以上の整数 |
-| roomId | 存在しなければ 404 |
-| host_key / token | 不一致は 403 |
-
-### エラーレスポンス形式
-
-```json
-{ "error": "FORBIDDEN", "message": "権限がありません", "fields": { "price": "0以上で入力してください" } }
-```
-
----
-
-## 5. エンドポイント一覧
-
-### コアAPI（BE issueに対応）
-
-| # | Method | パス | 権限 | Issue | 概要 |
-| --- | --- | --- | --- | --- | --- |
-| H | GET | `/api/health` | 誰でも | #4 | 死活監視 |
-| 1 | POST | `/api/rooms` | 誰でも | #9 | ルーム作成（host_key 発行） |
-| 2 | POST | `/api/rooms/{roomId}/participants` | 参加者 | #10 | 名前で参加（token 発行） |
-| 3 | POST | `/api/rooms/{roomId}/items` | 参加者 | #11 | 欲しいものを提案 |
-| 4 | GET | `/api/rooms/{roomId}/items` | 参加者 | #12 | 提案一覧（`?status=`絞込。買い物リストF6も） |
-| 5 | PATCH | `/api/rooms/{roomId}/items/{itemId}/status` | ホスト | #14 | 採用 / 却下 |
-| 6 | PATCH | `/api/rooms/{roomId}/items/{itemId}/purchased` | ホスト | #15 | 購入済みチェック |
-| 7 | GET | `/api/rooms/{roomId}/summary` | 参加者 | #16 | 集計 |
-
-### 追加設計（BE #32〜#34 で対応）
-
-| # | Method | パス | 権限 | 概要 | 対応 |
-| --- | --- | --- | --- | --- | --- |
-| 8 | GET | `/api/rooms/{roomId}` | 参加者 | ルーム情報取得 | §8-2。**#32** |
-| 9 | PATCH | `/api/rooms/{roomId}/items/{itemId}` | 提案者/ホスト | アイテムを編集 | §8-3。**#34** |
-| 10 | DELETE | `/api/rooms/{roomId}/items/{itemId}` | 提案者/ホスト | アイテムを削除 | §8-3。**#34** |
-| A2 | GET | `/api/rooms/{roomId}/participants` | 参加者 | 参加者一覧（任意） | F9は #12 で代替可 |
-
----
-
-## 6. エンドポイント詳細
-
-### H. GET `/api/health`（issue #4）
-Response `200`：`{ "status": "ok" }`（認証不要・liveness）
-
-### 1. POST `/api/rooms`（issue #9）
-Request：`{ "title": "花子の誕生日会", "eventDate": "2026-07-20", "memo": "会費3000円まで" }`
-Response `201`（**host_key はここだけ返す**）
 ```json
 {
-  "id": "b7e2...", "title": "花子の誕生日会", "eventDate": "2026-07-20", "memo": "会費3000円まで",
-  "hostKey": "9f13...",
-  "participantUrl": "https://app.example.com/rooms/b7e2...",
-  "hostUrl": "https://app.example.com/rooms/b7e2.../host?key=9f13...",
-  "createdAt": "..."
+  "code": "VALIDATION_ERROR",
+  "message": "入力内容を確認してください",
+  "fields": {
+    "budgetAmount": "0以上で入力してください"
+  },
+  "timestamp": "2026-07-18T12:00:00Z"
 }
 ```
 
-### 2. POST `/api/rooms/{roomId}/participants`（issue #10）
-Request：`{ "name": "太郎" }`（name 必須・空不可）
-Response `201`（**token はここだけ返す**。クライアントが保持し、編集/削除時に `X-Participant-Token` で送る）
+秘密値、SQL、スタックトレースをレスポンスへ含めない。
+
+## 6. エンドポイント一覧
+
+### 6.1 ルーム・参加者
+
+| Method | Path | 権限 | 概要 |
+| --- | --- | --- | --- |
+| GET | `/api/health` | 公開 | 死活監視 |
+| POST | `/api/rooms` | 公開 | ルーム作成 |
+| GET | `/api/rooms/{roomId}` | 公開 | 参加前に必要なルーム情報取得 |
+| POST | `/api/rooms/{roomId}/participants` | 公開 | 表示名で参加しtoken発行 |
+| GET | `/api/rooms/{roomId}/participants` | 参加者またはホスト | 参加者一覧 |
+
+### 6.2 商品・集計
+
+| Method | Path | 権限 | 概要 |
+| --- | --- | --- | --- |
+| POST | `/api/rooms/{roomId}/items` | 参加者 | 商品提案 |
+| GET | `/api/rooms/{roomId}/items` | 参加者またはホスト | 商品一覧 |
+| PATCH | `/api/rooms/{roomId}/items/{itemId}` | 提案者またはホスト | 商品内容編集 |
+| DELETE | `/api/rooms/{roomId}/items/{itemId}` | 提案者またはホスト | 商品削除 |
+| PATCH | `/api/rooms/{roomId}/items/{itemId}/status` | ホスト | 採用・見送り |
+| PATCH | `/api/rooms/{roomId}/items/{itemId}/purchased` | ホスト | 購入済み変更 |
+| PATCH | `/api/rooms/{roomId}/items/{itemId}/purchase-detail` | ホスト | 実購入額・購入者 |
+| GET | `/api/rooms/{roomId}/summary` | 参加者またはホスト | 見積・予算集計 |
+
+### 6.3 精算
+
+| Method | Path | 権限 | 概要 |
+| --- | --- | --- | --- |
+| PUT | `/api/rooms/{roomId}/settlement-members` | ホスト | 精算対象者を置換 |
+| POST | `/api/rooms/{roomId}/settlement/recalculate` | ホスト | 負担額と送金案を再計算 |
+| GET | `/api/rooms/{roomId}/settlement` | 参加者またはホスト | 現在の精算結果取得 |
+| PATCH | `/api/rooms/{roomId}/settlements/{settlementId}/settled` | 支払側本人またはホスト | 精算済み変更 |
+| POST | `/api/rooms/{roomId}/settlement/reset` | ホスト | 全精算を未精算へ戻す |
+
+## 7. 主要リクエストとレスポンス
+
+### 7.1 POST `/api/rooms`
+
+Request:
+
 ```json
-{ "id": "1a2b...", "roomId": "b7e2...", "name": "太郎", "token": "77aa...", "createdAt": "..." }
+{
+  "title": "キャンプ",
+  "eventDate": "2026-08-01",
+  "memo": "駅前で買い出し",
+  "budgetAmount": 12000
+}
 ```
 
-### 3. POST `/api/rooms/{roomId}/items`（issue #11）
-Request：`{ "participantId": "1a2b...", "name": "コーラ", "price": 200, "quantity": 4, "memo": "1.5Lで" }`
-Response `201`：作成された item（`status` は `proposed`、`purchased` は false）
+Response 201。hostKeyはこの応答だけで返す。
 
-### 4. GET `/api/rooms/{roomId}/items`（issue #12）
-クエリ：`?status=proposed|accepted|rejected`（省略時全件）、`?participantId=...`。買い物リストは `?status=accepted`。
-Response `200`：items 配列（`participantName` 付き。**token は含めない**）
+```json
+{
+  "id": "b7e2...",
+  "title": "キャンプ",
+  "eventDate": "2026-08-01",
+  "memo": "駅前で買い出し",
+  "budgetAmount": 12000,
+  "hostKey": "9f13...",
+  "participantUrl": "https://app.example.com/rooms/b7e2...",
+  "hostUrl": "https://app.example.com/rooms/b7e2.../host?key=9f13...",
+  "createdAt": "2026-07-18T12:00:00Z"
+}
+```
 
-### 5. PATCH `/api/rooms/{roomId}/items/{itemId}/status`（issue #14）
-ヘッダ `X-Host-Key`。Request：`{ "status": "accepted" }`（不正値は 400）。Response `200`：更新後 item
+### 7.2 GET `/api/rooms/{roomId}`
 
-### 6. PATCH `/api/rooms/{roomId}/items/{itemId}/purchased`（issue #15）
-ヘッダ `X-Host-Key`。Request：`{ "purchased": true }`。
-`status != 'accepted'` のアイテムへの購入チェックは 400 を推奨。Response `200`：更新後 item
+Response 200。hostKeyは含めない。
 
-### 7. GET `/api/rooms/{roomId}/summary`（issue #16 ＋ §8-1）
-Response `200`
+```json
+{
+  "id": "b7e2...",
+  "title": "キャンプ",
+  "eventDate": "2026-08-01",
+  "memo": "駅前で買い出し",
+  "budgetAmount": 12000,
+  "createdAt": "2026-07-18T12:00:00Z"
+}
+```
+
+### 7.3 POST `/api/rooms/{roomId}/participants`
+
+Request:
+
+```json
+{ "name": "太郎" }
+```
+
+Response 201。tokenはこの応答だけで返す。
+
+```json
+{
+  "id": "1a2b...",
+  "roomId": "b7e2...",
+  "name": "太郎",
+  "token": "77aa...",
+  "createdAt": "2026-07-18T12:10:00Z"
+}
+```
+
+### 7.4 POST `/api/rooms/{roomId}/items`
+
+Header: `X-Participant-Token`
+
+```json
+{
+  "name": "コーラ",
+  "price": 200,
+  "quantity": 4,
+  "memo": "1.5L"
+}
+```
+
+提案者はtokenから決定する。本文へparticipantIdを送らない。初期値はstatus=proposed、purchased=false。
+
+### 7.5 GET `/api/rooms/{roomId}/items`
+
+Query:
+
+- `status=proposed|accepted|rejected`
+- `participantId={uuid}`
+
+省略時は権限に応じた全件を返す。通常参加者画面ではrejectedを要求しない。レスポンスへparticipantNameを含め、tokenを含めない。
+
+### 7.6 PATCH 商品内容
+
+参加者は `X-Participant-Token`、ホストは `X-Host-Key` を送る。
+
+```json
+{
+  "name": "コーラ",
+  "price": 180,
+  "quantity": 6,
+  "memo": "ゼロも可"
+}
+```
+
+- 参加者は自分の提案だけ操作できる
+- 参加者がacceptedを編集するとproposedへ戻す
+- proposedへ戻すときはpurchased=falseとし、actualPriceと購入者をクリアする
+- status、purchased、actualPrice、paidByParticipantIdはこのAPIで変更しない
+
+### 7.7 PATCH status・purchased
+
+Header: `X-Host-Key`
+
+```json
+{ "status": "accepted" }
+```
+
+```json
+{ "purchased": true }
+```
+
+accepted以外をpurchased=trueにする要求は400とする。
+
+purchasedをfalseへ戻した場合はactualPriceとpaidByParticipantIdをNULLへ戻す。精算済みがある場合は変更を409で拒否する。
+
+### 7.8 PATCH purchase-detail
+
+Header: `X-Host-Key`
+
+```json
+{
+  "actualPrice": 720,
+  "paidByParticipantId": "1a2b..."
+}
+```
+
+actualPriceは単価ではなく、この商品行全体の実支払額である。
+
+### 7.9 GET `/api/rooms/{roomId}/summary`
+
 ```json
 {
   "roomId": "b7e2...",
   "acceptedTotalPrice": 3200,
-  "pendingTotalPrice": 1500,
+  "proposedTotalPrice": 1500,
+  "budgetAmount": 12000,
+  "remainingBudget": 8800,
+  "overBudgetAmount": 0,
   "acceptedItemCount": 5,
-  "byStatus": { "proposed": 4, "accepted": 5, "rejected": 1 },
+  "byStatus": {
+    "proposed": 4,
+    "accepted": 5,
+    "rejected": 1
+  },
   "perParticipant": [
-    { "participantId": "1a2b...", "name": "太郎", "proposalCount": 3,
-      "acceptedTotalPrice": 1200, "pendingTotalPrice": 400 }
+    {
+      "participantId": "1a2b...",
+      "name": "太郎",
+      "proposalCount": 3,
+      "acceptedTotalPrice": 1200
+    }
   ],
-  "itemQuantities": [ { "name": "コーラ", "totalQuantity": 4, "totalPrice": 800 } ]
+  "itemQuantities": [
+    { "name": "コーラ", "totalQuantity": 4, "estimatedTotalPrice": 800 }
+  ]
 }
 ```
-- `acceptedTotalPrice`＝買い物リストの合計（予算基準）、`pendingTotalPrice`＝提案中の合計。フロントは画面フェーズで使い分ける。
-- `itemQuantities` は採用のみ（買い物リストの数量）。
 
-### 8. GET `/api/rooms/{roomId}`（追加設計・§8-2）
-参加者がURLから入った直後にイベント名・日付を表示するために使う（F2）。
-Response `200`（**host_key は含めない**）
+- acceptedTotalPriceはacceptedの見積だけ
+- proposedTotalPriceはproposedの見積だけ
+- rejectedは件数以外の集計へ含めない
+- 予算未設定時、budgetAmount、remainingBudget、overBudgetAmountはnull
+- 超過時はremainingBudget=0、overBudgetAmountを正の値で返す
+
+## 8. 精算計算
+
+### 8.1 計算対象
+
+acceptedかつpurchasedで、actualPriceと購入者が入力済みの商品だけを使う。未入力商品は `incompletePurchaseItems` として警告へ返す。
+
+### 8.2 均等負担
+
+1. 実購入額合計を対象人数で整数除算する
+2. 商を全員の基本負担額とする
+3. 余りを参加登録順の早い人から1円ずつ加える
+4. createdAtが同じ場合はparticipantIdで順序を固定する
+
+### 8.3 立替差額と送金案
+
+- 立替額 = その参加者が購入者になっているactualPriceの合計
+- 差額 = 立替額 - 負担額
+- 差額が負の人を支払側、正の人を受取側とする
+- 参加登録順で並べ、支払側と受取側を順に相殺する
+- 0円の送金案は作らない
+
+必須の整合条件:
+
+- 負担額合計 = 実購入額合計
+- 立替額合計 = 実購入額合計
+- 全参加者の差額合計 = 0
+- 送金案合計 = 支払不足合計 = 受取超過合計
+- 同じ入力では同じ送金案になる
+
+### 8.4 再計算とロック
+
+- 精算済みが0件なら、ホストは対象者や購入情報を変更して再計算できる
+- 精算済みが1件以上なら、実購入額、購入者、対象者、再計算を409で拒否する
+- resetは全件のsettledAtをNULLにする
+- reset後に購入情報を変え、recalculateで送金案を置き換えられる
+
+### 8.5 精算レスポンス例
+
 ```json
-{ "id": "b7e2...", "title": "花子の誕生日会", "eventDate": "2026-07-20", "memo": "会費3000円まで", "createdAt": "..." }
+{
+  "actualTotalPrice": 10001,
+  "incompletePurchaseItems": [],
+  "members": [
+    {
+      "participantId": "1a2b...",
+      "name": "太郎",
+      "burdenAmount": 3334,
+      "paidAmount": 10001,
+      "balanceAmount": 6667
+    }
+  ],
+  "transfers": [
+    {
+      "id": "9c8d...",
+      "fromParticipantId": "2b3c...",
+      "toParticipantId": "1a2b...",
+      "amount": 3334,
+      "settledAt": null
+    }
+  ],
+  "locked": false
+}
 ```
-存在しない roomId は 404。
 
-### 9. PATCH `/api/rooms/{roomId}/items/{itemId}`（追加設計・§8-3）
-そのアイテムを編集する。**提案者本人とホストが操作できる**。
-- 認証：`X-Participant-Token`（提案者本人）または `X-Host-Key`（ホスト）。どちらでもなければ 403
-- status に関わらず編集可（採用済みを編集すると買い物リストの合計が変わる点に注意）
-- 変更可能：`name` / `price` / `quantity` / `memo`（`status` / `purchased` はここでは変更不可）
+## 9. バリデーション
 
-Request（変更する項目のみ）：`{ "name": "コーラ", "price": 180, "quantity": 6 }`
-Response `200`：更新後 item
-Errors：403（本人でもホストでもない）/ 404 / 400（バリデーション）
+| 対象 | ルール |
+| --- | --- |
+| title | 必須、空白だけ不可、100文字以内 |
+| eventDate | ISO日付 |
+| budgetAmount | NULLまたは0以上の整数 |
+| name | 必須、空白だけ不可、50文字以内 |
+| item name | 必須、空白だけ不可、100文字以内 |
+| price | 0以上の整数 |
+| quantity | 1以上の整数 |
+| actualPrice | NULLまたは0以上の整数 |
+| status | proposed / accepted / rejected |
+| settlement members | 1人以上、同一roomの参加者だけ |
 
-### 10. DELETE `/api/rooms/{roomId}/items/{itemId}`（追加設計・§8-3）
-そのアイテムを削除する。認証は #9 と同じ（提案者本人またはホスト）。Response `204`
+## 10. デプロイ仕様
 
-### A2. GET `/api/rooms/{roomId}/participants`（任意）
-Response `200`：`[{ "id": "...", "name": "太郎", "createdAt": "..." }]`（**token は含めない**）
+### 10.1 構成
 
----
-
-## 7. Issue ↔ 設計 対応表
-
-### 7-1. バックエンド（BE）
-
-| Issue | 内容 | 対応 |
+| 領域 | 採用先 | 設定 |
 | --- | --- | --- |
-| #4 | Spring Boot初期構成 / health | エンドポイント H |
-| #5 | PostgreSQL接続設定 | §2.5（Neon接続設定） |
-| #6 | rooms テーブル | §2.1 |
-| #7 | participants テーブル | §2.2（＋token） |
-| #8 | items テーブル | §2.3 |
-| #9 | ルーム作成API | エンドポイント 1 |
-| #10 | 参加者登録API | エンドポイント 2 |
-| #11 | アイテム追加API | エンドポイント 3 |
-| #12 | アイテム一覧API | エンドポイント 4（F6含む） |
-| #13 | host_keyホスト確認 | §4 共通仕様 |
-| #14 | 採用・却下API | エンドポイント 5 |
-| #15 | 購入チェックAPI | エンドポイント 6 |
-| #16 | 集計API | エンドポイント 7 / §3 |
-| #17 | バリデーション・エラー処理 | §4 |
-| #32 | ルーム情報取得APIを作る | エンドポイント 8 / §8-2 |
-| #33 | participantsにtokenを追加し本人確認の仕組みを作る | §2.2 / §4 / §8-3 |
-| #34 | アイテムの編集・削除APIを作る（提案者＋ホスト） | エンドポイント 9・10 / §8-3 |
+| FE | Cloudflare Pages | Root `frontend`、build `npm run build`、output `dist` |
+| API | Render Web Service | DockerfileからJava 21アプリを実行 |
+| DB | Neon PostgreSQL | pooled接続、SSL必須 |
 
-### 7-2. フロントエンド（FE）
+Cloudflare Pagesではtop-level `404.html`を置かず、SPA fallbackで `/rooms/{uuid}` をルートへ渡す。実際の直接アクセスは本番受け入れ試験で確認する。
 
-| Issue | 内容 | 対応 |
+Renderでは `backend/orderroom-backend/Dockerfile` を指定し、`/api/health` をHealth Check Pathにする。
+
+### 10.2 環境変数
+
+| 配置先 | 変数 | 内容 |
 | --- | --- | --- |
-| #18 | React + TypeScriptの初期構成を作る | §0（技術スタック） |
-| #19 | ルーム作成画面を作る | エンドポイント 1 |
-| #20 | 参加画面を作る | エンドポイント 2・8 |
-| #21 | 注文入力フォームを作る | エンドポイント 3 |
-| #22 | 注文一覧画面を作る | エンドポイント 4・5・6・9・10 / A2 |
-| #23 | ホスト管理画面を作る | エンドポイント 5・6 / §4（`X-Host-Key`） |
-| #24 | 集計表示を作る | エンドポイント 7 / §3 |
+| Cloudflare Pages | `VITE_API_BASE_URL` | Render APIのHTTPS URL |
+| Render | `DB_URL` | NeonのJDBC接続URL |
+| Render | `DB_USER` | DBユーザー |
+| Render | `DB_PASSWORD` | DBパスワード |
+| Render | `FRONTEND_BASE_URL` | Cloudflare Pages本番URL |
+| Render | `SPRING_PROFILES_ACTIVE` | `prod` |
 
----
+JDBC URLはNeon ConsoleのJava用接続情報を基準にし、SSLとchannel bindingを有効にする。Webアプリ接続はpooled hostnameを使い、マイグレーションや管理作業は必要に応じてdirect接続を使う。
 
-## 8. 未確認部分の追加設計（本改訂で確定）
+### 10.3 Spring Boot本番設定
 
-### 8-1. 集計対象
-「全体合計・個人別合計」を **採用（accepted）と提案中（pending）の両方** 返す方式に確定。却下は金額から除外。フロントが画面フェーズで使い分ける（提案中は pending、確定後は accepted）。→ §3・エンドポイント7。
+```properties
+server.port=${PORT:8080}
+spring.datasource.url=${DB_URL}
+spring.datasource.username=${DB_USER}
+spring.datasource.password=${DB_PASSWORD}
+app.frontend-base-url=${FRONTEND_BASE_URL}
+spring.jpa.show-sql=false
+```
 
-### 8-2. ルーム情報取得API（GET /api/rooms/{roomId}）
-参加導線（F2）に必須のため、補助扱いをやめてコアに格上げ。host_key は返さない。→ エンドポイント8。**#32 で対応**。
+MVP期間は `ddl-auto=update` を暫定利用する。v1.0後にFlywayを導入し、本番を `ddl-auto=validate` へ変更する。
 
-### 8-3. アイテムの編集/削除（提案者＋ホスト）
-みんなで作る欲しい物リストの各アイテムを、その提案者本人とホストが編集・削除できる。
-- 本人確認は、一覧に出る `participantId` ではなく秘密値 `token`（§2.2）で行う。これにより一覧を見た他人が勝手に編集する事故を防ぐ。
-- 操作できるのは提案者本人（`X-Participant-Token`）またはホスト（`X-Host-Key`）のみ。status によるロックはしない。
-- → エンドポイント9・10。`participants.token` 追加（**#33**）とアイテム編集・削除API（**#34**）で対応。
+### 10.4 CORS
 
-### 8-4. DBデプロイ先
-**Neon（サーバーレスPostgreSQL）に確定**。SSL必須・Pooler利用・接続情報は環境変数。→ §2.5。
+- 本番はFRONTEND_BASE_URLと一致するOriginだけ許可する
+- 開発環境はVite proxyを優先する
+- `Content-Type`、`X-Participant-Token`、`X-Host-Key` を許可する
+- PR Previewから本番APIを呼ばせない
+- `*` とcredentialsを併用しない
 
----
+## 11. テスト受け入れ条件
 
-## 9. 実装優先度の目安
+- 外部のNeon認証情報なしで自動テストを実行できる
+- ルーム作成、参加、商品権限、状態遷移、集計、精算をテストする
+- 他ルームのtoken、hostKey、participantIdを拒否する
+- participant tokenとhostKeyがレスポンスやログへ漏れない
+- 予算未設定、0円、超過を確認する
+- 1円、割り切れない合計、複数購入者、対象者1人を確認する
+- 精算済み後の変更ロックとresetを確認する
+- 本番でHealth API、DB接続、CORS、SPA直接アクセスを確認する
 
-1. #4・#5（起動・Neon接続）→ #6〜#8（テーブル/Entity）
-2. #9・#10・#11・#12（ルーム/参加/提案/一覧の基本CRUD）＋ エンドポイント8（ルーム取得）
-3. #13・#14・#15（ホスト操作）
-4. #16（集計）・#17（バリデーション）
-5. エンドポイント9・10（編集/削除）＝ 提案者＋ホストが操作。MVPに含める
+テストDBはTestcontainersのPostgreSQL、またはRepositoryを分離したモックを使用する。通常のテスト実行を本番DBへ接続しない。
 
----
+## 12. MVP後の技術負債
 
-## 10. MVP後の改善候補
-
-- **item作成にもtoken必須化**：提案者のなりすまし（他人名義で提案）を防ぐ。MVPは participantId のみでも可。
-- **ホストキーの露出**：`hostUrl` にキーを含むため共有時の取り扱いに注意。将来はワンタイム認証やログイン導入。
-- **status を PostgreSQL ENUM 型に**：値が固まったら CHECK から移行。
-- **楽観ロック**：同時編集対策に `items.version`＋`@Version`。
-- **論理削除**：履歴・再利用を見据えるなら `deleted_at`。
+- Flyway導入と `ddl-auto=validate` への移行
+- tokenとhostKeyのローテーション、失効
+- 楽観ロックによる同時編集対策
+- 商品と精算の監査履歴
+- レート制限
+- 厳密なアカウント認証
