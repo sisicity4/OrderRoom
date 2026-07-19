@@ -14,7 +14,7 @@ public record CreateItemRequest(
     @NotBlank(message = "アイテム名を正しく入力してください")
     @Size(max = 100, message = "アイテム名は100字以内で入力してください")
     String name,
-    
+
     @NotNull(message = "値段を正しく入力してください")
     @Min(value = 0, message = "値段をマイナスに設定することはできません")
     Integer price,

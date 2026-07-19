@@ -41,7 +41,7 @@ public class ParticipantControllerTest {
         Room room = new Room("テストルーム");
         roomRepository.save(room);
         UUID roomId = room.getId();
-        CreateParticipantRequest request = new CreateParticipantRequest("テスト"); 
+        CreateParticipantRequest request = new CreateParticipantRequest("テスト");
 
         mockMvc.perform(
             post("/api/rooms/{roomId}/participants", roomId)
@@ -53,13 +53,13 @@ public class ParticipantControllerTest {
         .andExpect(jsonPath("$.id").exists())
         .andExpect(jsonPath("$.roomId").value(roomId.toString()))
         .andExpect(jsonPath("$.token").exists())
-        .andExpect(jsonPath("$.createdAt").exists());   
+        .andExpect(jsonPath("$.createdAt").exists());
     }
 
     @Test // 1.roomIDが存在しないUUIDの場合
     void createParticipantNotFoundRoomId() throws Exception {
         UUID roomId = UUID.fromString("00000000-0000-0000-0000-000000000000");
-        CreateParticipantRequest request = new CreateParticipantRequest("テスト"); 
+        CreateParticipantRequest request = new CreateParticipantRequest("テスト");
 
         mockMvc.perform(
             post("/api/rooms/{roomId}/participants", roomId)
@@ -87,7 +87,7 @@ public class ParticipantControllerTest {
         .andExpect(jsonPath("$.message").value("パラメータの型が不正です"))
         .andExpect(jsonPath("$.fields.roomId").value("不正な値: " + roomId));
     }
-    
+
 
     @Test // 3.1 Participantのnameが空文字の場合
     void createParticipantNotParticipantName() throws Exception {
@@ -104,7 +104,7 @@ public class ParticipantControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("VALID_ERROR"))
         .andExpect(jsonPath("$.message").value("不正な入力です"))
-        .andExpect(jsonPath("$.fields.name").value("名前を正しく入力してください"));  
+        .andExpect(jsonPath("$.fields.name").value("名前を正しく入力してください"));
     }
 
     @Test // 3.2 Participantのnameが空文字の場合
@@ -122,6 +122,6 @@ public class ParticipantControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("VALID_ERROR"))
         .andExpect(jsonPath("$.message").value("不正な入力です"))
-        .andExpect(jsonPath("$.fields.name").value("名前を正しく入力してください"));  
+        .andExpect(jsonPath("$.fields.name").value("名前を正しく入力してください"));
     }
 }

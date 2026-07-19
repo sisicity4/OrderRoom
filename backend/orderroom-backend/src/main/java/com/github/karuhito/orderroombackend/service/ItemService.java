@@ -24,7 +24,7 @@ public class ItemService {
     private final ItemRepository itemRepository;
     private final RoomRepository roomRepository;
     private final ParticipantRepository participantRepository;
-    
+
     public ItemService(ItemRepository itemRepository, RoomRepository roomRepository,ParticipantRepository participantRepository ) {
         this.itemRepository = itemRepository;
         this.roomRepository = roomRepository;

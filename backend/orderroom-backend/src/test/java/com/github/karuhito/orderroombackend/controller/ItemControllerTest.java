@@ -55,7 +55,7 @@ public class ItemControllerTest {
         Room room = new Room("テストルーム");
         roomRepository.save(room);
         UUID roomId = room.getId();
-        
+
         Participant participant = new Participant(room, "テスト参加者");
         participantRepository.save(participant);
         UUID participantId = participant.getId();
@@ -77,13 +77,13 @@ public class ItemControllerTest {
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
-        
+
     }
 
     @Test // 1. roomIdが実在しない
     void createItemNotFoundRoom() throws Exception {
         UUID roomId = UUID.fromString("00000000-0000-0000-0000-000000000000");
-        
+
         UUID participantId = UUID.randomUUID();
 
         CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, 1, "テストメモ");
@@ -102,7 +102,7 @@ public class ItemControllerTest {
         Room room = new Room("テストルーム");
         roomRepository.save(room);
         UUID roomId = room.getId();
-        
+
         UUID participantId = UUID.randomUUID();
 
         CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, 1, "テストメモ");
@@ -120,10 +120,10 @@ public class ItemControllerTest {
     void createItemNotFoundParticipantId() throws Exception {
         Room room1 = new Room("テストルーム1");
         roomRepository.save(room1);
-        
+
         Room room2 = new Room("テストルーム2");
         roomRepository.save(room2);
-        
+
         UUID roomId = room2.getId();
 
         Participant participant = new Participant(room1, "別ルームの参加者");
@@ -191,7 +191,7 @@ public class ItemControllerTest {
         .andExpect(jsonPath("$.message").value("不正な入力です"))
         .andExpect(jsonPath("$.fields.name").value("アイテム名は100字以内で入力してください"));
     }
-    
+
     @Test // 5.1 Itemのpriceがマイナスの場合
     void createItemInValidPrice() throws Exception {
         UUID roomId = UUID.randomUUID();
@@ -226,7 +226,7 @@ public class ItemControllerTest {
         .andExpect(jsonPath("$.fields.price").value("値段を正しく入力してください"));
     }
 
-    
+
     @Test // 6.1 Itemのquantityが0以下の場合
     void createItemInValidQuantity() throws Exception {
         UUID roomId = UUID.randomUUID();
