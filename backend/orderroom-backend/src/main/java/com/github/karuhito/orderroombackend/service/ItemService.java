@@ -1,13 +1,16 @@
 package com.github.karuhito.orderroombackend.service;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
 import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateItemResponse;
+import com.github.karuhito.orderroombackend.dto.ItemListResponse;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Item;
+import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.exception.ParticipantNotFoundException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
@@ -46,5 +49,11 @@ public class ItemService {
             savedItem.getCreatedAt(),
             savedItem.getUpdatedAt()
         );
+    }
+
+    public List<ItemListResponse> getItems(UUID roomId, ItemStatus status, UUID participantId) {
+        roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
+        List<Item> items = itemRepository.findItemsByRoomAndFilters(roomId, status, participantId);
+        return items.stream().map(item -> new ItemListResponse(item.getId(), item.getRoom().getId(), item.getParticipant().getId(), item.getParticipant().getName(), item.getName(), item.getPrice(), item.getQuantity(), item.getMemo(), item.getStatus(), item.isPurchased(), item.getCreatedAt(), item.getUpdatedAt())).toList();
     }
 }
