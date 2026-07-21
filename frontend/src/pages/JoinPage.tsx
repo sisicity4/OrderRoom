@@ -13,6 +13,7 @@ function JoinPage() {
       <p className='border w-fit px-2 mr-2'>名前</p>
       <input
       className='border-b outline-none w-55'
+      placeholder="名前を入力"
       type="text"
       value={name}
       onChange={(e) => setName(e.target.value)}/>
@@ -21,9 +22,10 @@ function JoinPage() {
       <hr className='border-t-5' />
 
     <div> {/*URL入力処理*/}
-      <p className='border px-3 w-fit mb-2 text-[#7A6B57]'>伝票番号</p>
+      <p className='border px-3 w-fit mb-2'>伝票番号</p>
        <input
       className='border-b outline-none w-70'
+      placeholder="URLを入力"
       type="text"
       value={url}
       onChange={(e) => setUrl(e.target.value)} />
@@ -31,12 +33,14 @@ function JoinPage() {
 
     <hr className='border-t-5' />
 
-    <div className='flex flex-col'>
-
-      <p className='tracking-[0.8em] text-[#7A6B57]'>相席のうえ</p>
-      <p className='tracking-[0.8em] text-[#7A6B57]'>注文票を共有します</p>
-       <button
-       className='self-center'
+    <div className='flex'>
+      <div className='flex flex-col'>
+        <p className='tracking-[0.8em] text-[#7A6B57]'>相席のうえ</p>
+        <p className='tracking-[0.8em] text-[#7A6B57]'>注文票を共有します</p> 
+      </div>
+      <button
+       className='ml-auto border-2 w-16 h-16 rounded-full text-red-700
+       [writing-mode:vertical-rl] -rotate-12 font-bold'
        onClick={() => console.log({name,url})}>参加</button>
     </div>
 
