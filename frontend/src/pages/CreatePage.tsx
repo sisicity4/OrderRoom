@@ -29,6 +29,7 @@ function CreatePage() {
           <p className='border px-2'>ルーム名</p>
           <input
           className='border-b-2 ml-1.5 border-neutral-700 outline-none'
+          placeholder='ルーム名を入力'
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -45,10 +46,20 @@ function CreatePage() {
         setMemo(e.target.value)
       } />
       </div>
-
-
-      <button onClick={() => console.log({title,date,memo})}>作成</button>
-
+      
+      <hr className='border-t-5' />
+    <div className='flex'>
+      <div className='flex flex-col tracking-[0.2em] text-[#7A6B57]'>
+        <span>発券後に</span>
+        <span>URLが払い出されます。</span>
+      </div>
+        <button 
+        className='ml-auto border-2 w-16 h-16 text-red-700 rounded-full
+        [writing-mode:vertical-rl] -rotate-12 font-bold'
+        onClick={() => console.log({title,date,memo})}>作成</button>
+    </div>
+      
+      
     </div>
   );
 }
