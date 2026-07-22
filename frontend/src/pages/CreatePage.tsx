@@ -16,9 +16,9 @@ function CreatePage() {
 
   return (
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
-      <h3 className='tracking-[1.6em] text-neutral-500'>開店</h3>
-      <p className='tracking-[0.5em] text-neutral-500'>るーむさくせい</p>
-      <h1 className='text-5xl font-bold pb-5'>ルーム作成</h1>
+      <h3 className='tracking-[1.6em] text-[#7A6B57]'>開店</h3>
+      <p className='tracking-[0.5em] text-[#7A6B57]'>るーむさくせい</p>
+      <h1 className='text-5xl font-bold'>ルーム作成</h1>
 
       <div className='flex'>
        <p className='border px-2' >日 付</p>
