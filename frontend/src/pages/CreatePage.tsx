@@ -2,8 +2,17 @@ import { useState } from 'react'
 
 function CreatePage() {
   const [title, setTitle] = useState('');
-  const [date, setDate] = useState('');
+  const [eventDate, setEventDate] = useState('');
   const [memo, setMemo] = useState('');
+  const handleCreate = async () => {
+  const res = await fetch('api/rooms',{
+    method:'POST',
+    headers: {'Content-Type':'/application/json'},
+    body:JSON.stringify({title,eventDate,memo})
+    })
+    const data = await res.json()
+    console.log(data)
+  }
 
   return (
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
@@ -17,9 +26,9 @@ function CreatePage() {
        <input
        className='border-b-2 border-neutral-700 ml-1.5 outline-none'
        type="date"
-       value={date}
+       value={eventDate}
        onChange={(e) =>
-       setDate(e.target.value)
+       setEventDate(e.target.value)
        } />
       </div>
 
@@ -56,7 +65,7 @@ function CreatePage() {
         <button 
         className='ml-auto border-2 w-16 h-16 text-red-700 rounded-full
         [writing-mode:vertical-rl] -rotate-12 font-bold'
-        onClick={() => console.log({title,date,memo})}>作成</button>
+        onClick={handleCreate}>作成</button>
     </div>
       
       
