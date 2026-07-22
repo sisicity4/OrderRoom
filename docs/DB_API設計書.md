@@ -218,15 +218,29 @@ stateDiagram-v2
 | participantId | 同じroomに存在しなければ404 |
 | hostKey / token | 不一致は403 |
 
-### 5.3 dev統合時点の実装差分
+### 5.3 2026-07-22時点の実装差分
 
-2026-07-18に統合した実装では、参加者登録と商品作成が追加されている。確定仕様へ到達するまで、次の差分を残課題として扱う。
+実装済み:
 
-- `POST /api/rooms/{roomId}/participants` は201、token発行、400、404まで実装済み
-- `POST /api/rooms/{roomId}/items` は201、入力検証、room・participant所属確認まで実装済み
-- 商品作成は現在 `participantId` を本文で受け取る。確定仕様では `X-Participant-Token` から提案者を決定する
-- ItemStatusは現在JSONで `PROPOSED` と返る。確定API値は小文字の `proposed`
-- 参加・商品ControllerテストはNeon接続設定を使うため、外部DBなしで実行できるテスト環境は引き続き必要
+- `POST /api/rooms`
+- `POST /api/rooms/{roomId}/participants`
+- `POST /api/rooms/{roomId}/items`
+- `GET /api/rooms/{roomId}/items`
+
+未実装または確定仕様との差分:
+
+- `GET /api/rooms/{roomId}` は未実装（Issue #32）。
+- `X-Host-Key` の検証は未実装（Issue #13）。
+- `X-Participant-Token` による本人確認は未実装（Issue #33）。
+- 商品編集・削除は未実装（Issue #34）。
+- `budgetAmount` はRoom Entity/APIへ未反映。
+- 商品作成は本文の `participantId` を使っており、確定仕様のtoken認証へ未移行。
+- ItemStatusは現在JSONで `PROPOSED` と返る。確定API値は小文字の `proposed`。
+- 外部DB認証情報なしで自動テストを実行できない。
+
+### 5.4 保留中のルーム操作
+
+ルーム情報更新、ルーム終了、ルーム削除は、MVPへの追加可否、データ保持、精算済みデータとの整合、権限をPMが決定するまでAPIを追加しない。
 
 ## 6. エンドポイント一覧
 
