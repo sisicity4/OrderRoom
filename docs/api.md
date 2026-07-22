@@ -1,107 +1,11 @@
-# API設計メモ
+# API仕様の入口
 
-## 方針
+APIとDBの詳細仕様は、[DB・API設計書](DB_API%E8%A8%AD%E8%A8%88%E6%9B%B8.md)へ統合した。
 
-- REST APIで作る
-- レスポンスはJSON
-- MVPではログインを作らない
-- ホスト操作は `host_key` で判定する
-- 集計値はDBに保存せず、アイテム情報から計算して返す
+このファイルは、過去のリンクを壊さないために残している。ここへ個別のリクエスト例や独自仕様を追加せず、次の資料を参照する。
 
----
+- API・DB・認証・集計・精算: [DB・API設計書](DB_API%E8%A8%AD%E8%A8%88%E6%9B%B8.md)
+- MVP範囲: [MVP](MVP.md)
+- 期限と実装順: [ロードマップ](%E3%83%AD%E3%83%BC%E3%83%89%E3%83%9E%E3%83%83%E3%83%97.md)
 
-## ルーム
-
-### ルーム作成
-
-`POST /api/rooms`
-
-```json
-{
-  "title": "七夕パーティー",
-  "date": "2026-07-20",
-  "memo": "買い出し用"
-}
-```
-
-### ルーム取得
-
-`GET /api/rooms/{roomId}`
-
----
-
-## 参加者
-
-### 参加者登録
-
-`POST /api/rooms/{roomId}/participants`
-
-```json
-{
-  "name": "たいが"
-}
-```
-
----
-
-## アイテム
-
-### アイテム追加
-
-`POST /api/rooms/{roomId}/items`
-
-```json
-{
-  "participantId": 1,
-  "name": "コーラ",
-  "price": 180,
-  "quantity": 3,
-  "memo": "ゼロもあり"
-}
-```
-
-### アイテム一覧取得
-
-`GET /api/rooms/{roomId}/items`
-
-### 採用・却下
-
-`PATCH /api/rooms/{roomId}/items/{itemId}/status?hostKey={hostKey}`
-
-```json
-{
-  "status": "accepted"
-}
-```
-
-### 購入チェック
-
-`PATCH /api/rooms/{roomId}/items/{itemId}/purchased?hostKey={hostKey}`
-
-```json
-{
-  "purchased": true
-}
-```
-
----
-
-## 集計
-
-### 集計取得
-
-`GET /api/rooms/{roomId}/summary`
-
-返す内容:
-
-- 全体の合計金額
-- 個人別の合計金額
-- 商品ごとの合計数量
-
----
-
-## エラー方針
-
-- 存在しない `roomId`: 404
-- `host_key` 不一致: 403
-- 入力値不正: 400
+更新日: 2026-07-18
