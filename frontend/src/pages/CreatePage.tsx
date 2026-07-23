@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function CreatePage() {
   const [title, setTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [memo, setMemo] = useState('');
+  const navigate=useNavigate();
   const handleCreate = async () => {
   const res = await fetch('api/rooms',{
     method:'POST',
@@ -12,6 +14,7 @@ function CreatePage() {
     })
     const data = await res.json()
     console.log(data)
+    navigate(`/rooms/${data.roomId}`)
   }
 
   return (
@@ -62,10 +65,10 @@ function CreatePage() {
         <span>発券後に</span>
         <span>URLが払い出されます。</span>
       </div>
-        <button 
-        className='ml-auto border-2 w-16 h-16 text-red-700 rounded-full
-        [writing-mode:vertical-rl] -rotate-12 font-bold'
-        onClick={handleCreate}>作成</button>
+      <button onClick={() => navigate('/rooms/test-123')}
+        className=' ml-auto border-2 w-16 h-16 text-red-700 rounded-full
+        [writing-mode:vertical-rl] -rotate-12 font-bold cursor-pointer'>作成
+      </button>
     </div>
       
       
