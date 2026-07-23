@@ -12,6 +12,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.github.karuhito.orderroombackend.dto.ErrorResponse;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
         @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -44,5 +47,12 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> participantNotFoundException(ParticipantNotFoundException ex) {
             ErrorResponse response = new ErrorResponse("PARTICIPANT_NOT_FOUND", "参加者IDが正しくありません", null);
             return ResponseEntity.status(404).body(response);
+        }
+
+        @ExceptionHandler(InvalidHostKeyException.class)
+        public ResponseEntity<ErrorResponse> invalidHostKeyException(InvalidHostKeyException ex) {
+            ErrorResponse response = new ErrorResponse("FORBIDDEN", "ホストキーが無効です", null);
+            log.warn("ルーム: {} で {} が起きています", ex.getMessage(), ex.getReason());
+            return ResponseEntity.status(403).body(response);
         }
 }
