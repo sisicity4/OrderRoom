@@ -1,5 +1,6 @@
 package com.github.karuhito.orderroombackend.entity;
 
+import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -13,6 +14,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
@@ -54,15 +56,23 @@ public class Item {
     @Column(
         name = "price",
         nullable = false,
-        columnDefinition = "integer default 0 check (price >= 0)"
+        check = @CheckConstraint(
+            name = "items_price_check",
+            constraint = "price >= 0"
+        )
     )
+    @ColumnDefault("0")
     private int price;
 
     @Column(
         name = "quantity",
         nullable = false,
-        columnDefinition = "integer default 1 CHECK (quantity >= 1)"
+        check = @CheckConstraint(
+            name = "items_quantity_check",
+            constraint = "quantity >= 1"
+        )    
     )
+    @ColumnDefault("1")
     private int quantity;
 
     @Column(name = "memo")
@@ -71,8 +81,12 @@ public class Item {
     @Column(
         name = "status",
         nullable = false,
-        columnDefinition = "varchar(20) default 'proposed' check (status in ('proposed', 'accepted', 'rejected'))"
+        check = @CheckConstraint(
+            name = "items_status_check",
+            constraint = "status in ('proposed', 'accepted', 'rejected')"
+        )
     )
+    @ColumnDefault("'proposed'")
     private ItemStatus status;
 
     @Column(
