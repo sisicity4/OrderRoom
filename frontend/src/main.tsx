@@ -5,6 +5,7 @@ import App from './App.tsx'
 import {BrowserRouter, Routes, Route }from 'react-router-dom'
 import CreatePage from './pages/CreatePage'
 import JoinPage from './pages/JoinPage'
+import RoomPage from './pages/RoomPage'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')!).render(
       <Route path="/" element={<App />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/join" element={<JoinPage />} />
+      <Route path="/rooms/:roomId" element={<RoomPage />} />
     </Routes>
     </BrowserRouter>
   </StrictMode>,
