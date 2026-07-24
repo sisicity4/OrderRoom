@@ -5,6 +5,7 @@ function CreatePage() {
   const [title, setTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [memo, setMemo] = useState('');
+  const [budgetAmount,setBudgetAmount]=useState('');
   const navigate=useNavigate();
   const handleCreate = async () => {
   const res = await fetch('api/rooms',{
@@ -33,6 +34,8 @@ function CreatePage() {
        onChange={(e) =>
        setEventDate(e.target.value)
        } />
+
+      
       </div>
 
     <hr className='border-t-5'/ >
@@ -45,7 +48,16 @@ function CreatePage() {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-              />
+          />
+
+          <p className='border px-2 ml-70'>予算</p>
+          <input
+          className='border-b-2 border-neutral-700 outline-none ml-1.5'
+          placeholder='予算を入力'
+          type="text"
+          value={budgetAmount}
+          onChange={(e) => setBudgetAmount(e.target.value)}
+          />
       </div>
 
       <div className='flex flex-col'>
