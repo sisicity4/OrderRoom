@@ -1,5 +1,6 @@
 package com.github.karuhito.orderroombackend.controller;
 
+import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,6 +19,7 @@ import com.github.karuhito.orderroombackend.service.ItemService;
 
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 
@@ -43,5 +45,10 @@ public class ItemController {
         List<ItemListResponse> response = itemService.getItems(roomId, status, participantId);
         return ResponseEntity.status(200).body(response);
     }
-    
+       
+    @PatchMapping("/{itemId}/status") // アイテムのStatusを更新する
+    public ResponseEntity<ItemListResponse> updateStatus(@PathVariable UUID roomId, @PathVariable UUID itemId, @Valid @RequestBody UpdateItemStatusRequest request ) {
+        ItemListResponse response = itemService.updateStatus(roomId, itemId, request);
+        return ResponseEntity.status(200).body(response);
+    }
 }
