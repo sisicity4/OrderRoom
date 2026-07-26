@@ -55,4 +55,10 @@ public class GlobalExceptionHandler {
             log.warn("ルーム: {} で {} が起きています", ex.getMessage(), ex.getReason());
             return ResponseEntity.status(403).body(response);
         }
+
+        @ExceptionHandler(ItemNotFoundException.class)
+        public ResponseEntity<ErrorResponse> itemNotFoundException(ItemNotFoundException ex) {
+            ErrorResponse response = new ErrorResponse("ITEM_NOT_FOUND", "アイテムが見つかりません", null);
+            return ResponseEntity.status(404).body(response);
+        }
 }
