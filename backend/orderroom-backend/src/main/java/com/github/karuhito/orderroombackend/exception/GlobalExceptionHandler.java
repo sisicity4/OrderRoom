@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -60,5 +61,13 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> itemNotFoundException(ItemNotFoundException ex) {
             ErrorResponse response = new ErrorResponse("ITEM_NOT_FOUND", "アイテムが見つかりません", null);
             return ResponseEntity.status(404).body(response);
+        }
+
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+            Map<String, String> fieldsMap = new HashMap<>();
+            fieldsMap.put("status", "不正なstatusです");
+            ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
+            return ResponseEntity.status(400).body(response);
         }
 }
