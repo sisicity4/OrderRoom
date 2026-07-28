@@ -10,6 +10,8 @@ function RoomPage(){
   const [price,setPrice]=useState('');
   const [quantity,setQuantity]=useState('');
   const [error,setError]=useState('');
+
+  const total = list.reduce((acc,item) => acc + item.price * item.quantity,0);
   
   
   return(
@@ -33,14 +35,21 @@ function RoomPage(){
       
       <hr className='border-t-5' />
      
-      
-      <p className='border w-fit px-2'>提案</p>
+    
+    
+    <div className='flex'>
+        <p className='border w-fit px-2'>提案</p>
+        <p className='border ml-auto px-2'>合計</p>
+        <p className='border-b ml-2 mr-35 tracking-[0.2em]'>{total}円</p>
+    </div>
       <ul>
         {list.map((item, index) => (
           <li className='border border-dashed p-3'
            key={index}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}</li>
           ))}
       </ul>
+
+
     <div className='flex '>
       <input 
       className='border outline-none border-dashed'
@@ -68,9 +77,13 @@ function RoomPage(){
     {error && <p className='text-red-700'>{error}</p>}
       
       <button onClick={()=>{
-        if (name === '' || price === '' || quantity === '') {
+      if (name === '' || price === '' || quantity === '') {
       setError("入力欄をすべて入れてください。");
       return;
+      }
+      if (isNaN(Number(price)) || isNaN(Number(quantity))) {
+        setError("値段と個数は数字で入れてください。");
+        return;
         }
         setList([...list,{text:name,price:Number(price),quantity:Number(quantity)}]);
         setName('');
