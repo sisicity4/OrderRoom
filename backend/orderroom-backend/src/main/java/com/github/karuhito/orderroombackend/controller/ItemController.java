@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateItemResponse;
 import com.github.karuhito.orderroombackend.dto.ItemListResponse;
+import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.service.ItemService;
 
@@ -51,4 +52,11 @@ public class ItemController {
         ItemListResponse response = itemService.updateStatus(roomId, itemId, request);
         return ResponseEntity.status(200).body(response);
     }
+
+    @PatchMapping("/{itemId}/purchased") // アイテムのpurchasedを更新する
+    public ResponseEntity<ItemListResponse> updatePurchased(@PathVariable UUID roomId, @PathVariable UUID itemId, @Valid @RequestBody UpdateItemPurchasedRequest request) {
+        ItemListResponse response = itemService.updatePurchased(roomId, itemId, request);
+        return ResponseEntity.status(200).body(response);
+    }
+
 }
