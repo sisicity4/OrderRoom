@@ -1,6 +1,8 @@
 package com.github.karuhito.orderroombackend.exception;
 
+
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
@@ -14,6 +16,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import com.github.karuhito.orderroombackend.dto.ErrorResponse;
 
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.core.JacksonException.Reference;
+import tools.jackson.databind.exc.InvalidFormatException;
 
 @Slf4j
 @RestControllerAdvice
@@ -66,7 +70,18 @@ public class GlobalExceptionHandler {
         @ExceptionHandler(HttpMessageNotReadableException.class)
         public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
             Map<String, String> fieldsMap = new HashMap<>();
-            fieldsMap.put("status", "不正なstatusです");
+            Throwable cause = ex.getCause();
+            if (cause instanceof InvalidFormatException) {
+                InvalidFormatException castCause = (InvalidFormatException)cause;
+                List<Reference> referenceList = castCause.getPath();
+                Reference reference = referenceList.get(0);
+                String fieldName = reference.getPropertyName();
+                fieldsMap.put(fieldName, "不正な" + fieldName + "です");
+            } else {
+                fieldsMap.put("request", "パラメータの型が不正です");
+
+            }
+            
             ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
             return ResponseEntity.status(400).body(response);
         }
