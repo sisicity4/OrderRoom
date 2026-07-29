@@ -91,7 +91,7 @@ public class ItemService {
     public ItemListResponse updatePurchased(UUID roomId, UUID itemId, UpdateItemPurchasedRequest request) {
         Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
 
-        // StatusがACCEPTED以外のときは
+        // StatusがACCEPTED以外のときはItemStatusInvalidExceptionをthrow
         if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
             throw new ItemStatusInvalidException(itemId, item.getStatus());
         }
