@@ -8,12 +8,14 @@ import org.springframework.stereotype.Service;
 import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateItemResponse;
 import com.github.karuhito.orderroombackend.dto.ItemListResponse;
+import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
+import com.github.karuhito.orderroombackend.exception.ItemStatusInvalidException;
 import com.github.karuhito.orderroombackend.exception.ParticipantNotFoundException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
@@ -82,6 +84,33 @@ public class ItemService {
             updatedItem.getStatus(),
             updatedItem.isPurchased(),
             updatedItem.getCreatedAt(),
+            updatedItem.getUpdatedAt()
+        );
+    }
+
+    public ItemListResponse updatePurchased(UUID roomId, UUID itemId, UpdateItemPurchasedRequest request) {
+        Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
+
+        // StatusがACCEPTED以外のときは
+        if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
+            throw new ItemStatusInvalidException(itemId, item.getStatus());
+        }
+        item.setPurchased(request.purchased());
+
+        Item updatedItem = itemRepository.save(item);
+
+        return new ItemListResponse(
+            updatedItem.getId(), 
+            updatedItem.getRoom().getId(),
+            updatedItem.getParticipant().getId(),
+            updatedItem.getParticipant().getName(),
+            updatedItem.getName(), 
+            updatedItem.getPrice(), 
+            updatedItem.getQuantity(), 
+            updatedItem.getMemo(), 
+            updatedItem.getStatus(), 
+            updatedItem.isPurchased(), 
+            updatedItem.getCreatedAt(), 
             updatedItem.getUpdatedAt()
         );
     }
