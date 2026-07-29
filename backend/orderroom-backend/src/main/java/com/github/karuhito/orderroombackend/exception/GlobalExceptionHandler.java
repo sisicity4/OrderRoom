@@ -70,4 +70,10 @@ public class GlobalExceptionHandler {
             ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
             return ResponseEntity.status(400).body(response);
         }
+        
+        @ExceptionHandler(ItemStatusInvalidException.class)
+        public ResponseEntity<ErrorResponse> itemStatusInValidException(ItemStatusInvalidException ex) {
+            ErrorResponse response  = new ErrorResponse("CONFLICT", "アイテムを採用済みにしている必要があります", null);
+            return ResponseEntity.status(409).body(response);
+        }
 }
