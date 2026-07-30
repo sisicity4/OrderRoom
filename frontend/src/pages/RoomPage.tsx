@@ -44,9 +44,15 @@ function RoomPage(){
     </div>
       <ul>
         {list.map((item, index) => (
-          <li className='border border-dashed p-3'
-           key={index}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}</li>
+          <li className='border border-dashed p-3 flex'
+            key={index}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}
+            <button 
+            className='border px-2 ml-auto cursor-pointer'
+            onClick={() => setList(list.filter((item, i) => i !== index))} >削除
+            </button>
+            </li>
           ))}
+          
       </ul>
 
 
