@@ -16,4 +16,5 @@ public interface ItemRepository  extends JpaRepository<Item, UUID>{
     List<Item> findItemsByRoomAndFilters(@Param("roomId") UUID roomId, @Param("status") ItemStatus status, @Param("participantId") UUID participantId);
 
     Optional<Item> findByIdAndRoomId(UUID id, UUID roomId);
+    List<Item> findByRoomId(UUID roomId);
 }
