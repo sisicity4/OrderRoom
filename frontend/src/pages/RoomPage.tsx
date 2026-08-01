@@ -3,6 +3,7 @@ type Proposal={
     text: string;
     quantity: number;
     price: number;
+    memo:string;
   };
 function RoomPage(){
   const [name,setName]=useState('');
@@ -10,7 +11,8 @@ function RoomPage(){
   const [price,setPrice]=useState('');
   const [quantity,setQuantity]=useState('');
   const [error,setError]=useState('');
-  
+  const [selected,setSelected]=useState<number|null>(null);
+  const [memoText,setMemoText]=useState('')
   
   return(
     <div className='bg-[#f0e5cc] min-h-screen flex flex-col gap-4 p-8'>
@@ -38,7 +40,11 @@ function RoomPage(){
       <ul>
         {list.map((item, index) => (
           <li className='border border-dashed p-3'
-           key={index}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}</li>
+           key={index}
+           onClick={()=>{
+            setSelected(index);
+            setMemoText(item.memo);
+           }}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}</li>
           ))}
       </ul>
     <div className='flex '>
@@ -72,13 +78,36 @@ function RoomPage(){
       setError("入力欄をすべて入れてください。");
       return;
         }
-        setList([...list,{text:name,price:Number(price),quantity:Number(quantity)}]);
+        setList([...list,{text:name,price:Number(price),quantity:Number(quantity),memo:''}]);
         setName('');
         setPrice('');
         setQuantity('');
         setError('');
       }}>提案の追加</button>
-    </div>
+
+      {selected !== null && (
+        <div className='fixed inset-0 bg-black/40 flex items-end'
+          onClick={()=>setSelected(null)}>
+          <div className='bg-[#f0e5cc] w-full rounded-t-2xl p-6 flex flex-col gap-3'
+            onClick={(e)=>e.stopPropagation()}>
+            <p className='border w-fit px-2'>メモ</p>
+            <h2 className='text-xl font-bold'>{list[selected].text}</h2>
+            <textarea
+              className='border border-dashed outline-none p-2 h-32'
+              value={memoText}
+              placeholder='メモを記入'
+              onChange={(e)=>setMemoText(e.target.value)} />
+            <div className='flex gap-4'>
+              <button onClick={()=>{
+                setList(list.map((item,i)=> i===selected ? {...item,memo:memoText} : item));
+                setSelected(null);
+              }}>保存</button>
+              <button onClick={()=>setSelected(null)}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
+        </div>
 
   );
   
