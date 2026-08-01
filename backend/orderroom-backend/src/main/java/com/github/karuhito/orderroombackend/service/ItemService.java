@@ -8,10 +8,14 @@ import org.springframework.stereotype.Service;
 import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateItemResponse;
 import com.github.karuhito.orderroombackend.dto.ItemListResponse;
+import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
+import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
+import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
+import com.github.karuhito.orderroombackend.exception.ItemStatusInvalidException;
 import com.github.karuhito.orderroombackend.exception.ParticipantNotFoundException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
@@ -55,5 +59,59 @@ public class ItemService {
         roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
         List<Item> items = itemRepository.findItemsByRoomAndFilters(roomId, status, participantId);
         return items.stream().map(item -> new ItemListResponse(item.getId(), item.getRoom().getId(), item.getParticipant().getId(), item.getParticipant().getName(), item.getName(), item.getPrice(), item.getQuantity(), item.getMemo(), item.getStatus(), item.isPurchased(), item.getCreatedAt(), item.getUpdatedAt())).toList();
+    }
+
+    // ItemListResponseを再利用する
+    public ItemListResponse updateStatus(UUID roomId, UUID itemId, UpdateItemStatusRequest request) {
+        Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
+        item.setStatus(request.status());
+        // statusがACCEPTED以外になる場合、Purchasedをfalseにする
+        if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
+            item.setPurchased(false);
+        }
+
+        Item updatedItem = itemRepository.save(item);
+        
+        return new ItemListResponse(
+            updatedItem.getId(),
+            updatedItem.getRoom().getId(),
+            updatedItem.getParticipant().getId(),
+            updatedItem.getParticipant().getName(), 
+            updatedItem.getName(),
+            updatedItem.getPrice(),
+            updatedItem.getQuantity(),
+            updatedItem.getMemo(),
+            updatedItem.getStatus(),
+            updatedItem.isPurchased(),
+            updatedItem.getCreatedAt(),
+            updatedItem.getUpdatedAt()
+        );
+    }
+
+    public ItemListResponse updatePurchased(UUID roomId, UUID itemId, UpdateItemPurchasedRequest request) {
+        Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
+
+        // StatusがACCEPTED以外のときはItemStatusInvalidExceptionをthrow
+        if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
+            throw new ItemStatusInvalidException(itemId, item.getStatus());
+        }
+        item.setPurchased(request.purchased());
+
+        Item updatedItem = itemRepository.save(item);
+
+        return new ItemListResponse(
+            updatedItem.getId(), 
+            updatedItem.getRoom().getId(),
+            updatedItem.getParticipant().getId(),
+            updatedItem.getParticipant().getName(),
+            updatedItem.getName(), 
+            updatedItem.getPrice(), 
+            updatedItem.getQuantity(), 
+            updatedItem.getMemo(), 
+            updatedItem.getStatus(), 
+            updatedItem.isPurchased(), 
+            updatedItem.getCreatedAt(), 
+            updatedItem.getUpdatedAt()
+        );
     }
 }

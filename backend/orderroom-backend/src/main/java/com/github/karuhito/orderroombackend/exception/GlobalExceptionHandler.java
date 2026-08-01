@@ -1,9 +1,12 @@
 package com.github.karuhito.orderroombackend.exception;
 
+
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,6 +16,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import com.github.karuhito.orderroombackend.dto.ErrorResponse;
 
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.core.JacksonException.Reference;
+import tools.jackson.databind.exc.InvalidFormatException;
 
 @Slf4j
 @RestControllerAdvice
@@ -54,5 +59,36 @@ public class GlobalExceptionHandler {
             ErrorResponse response = new ErrorResponse("FORBIDDEN", "ホストキーが無効です", null);
             log.warn("ルーム: {} で {} が起きています", ex.getMessage(), ex.getReason());
             return ResponseEntity.status(403).body(response);
+        }
+
+        @ExceptionHandler(ItemNotFoundException.class)
+        public ResponseEntity<ErrorResponse> itemNotFoundException(ItemNotFoundException ex) {
+            ErrorResponse response = new ErrorResponse("ITEM_NOT_FOUND", "アイテムが見つかりません", null);
+            return ResponseEntity.status(404).body(response);
+        }
+
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+            Map<String, String> fieldsMap = new HashMap<>();
+            Throwable cause = ex.getCause();
+            if (cause instanceof InvalidFormatException) {
+                InvalidFormatException castCause = (InvalidFormatException)cause;
+                List<Reference> referenceList = castCause.getPath();
+                Reference reference = referenceList.get(0);
+                String fieldName = reference.getPropertyName();
+                fieldsMap.put(fieldName, "不正な" + fieldName + "です");
+            } else {
+                fieldsMap.put("request", "パラメータの型が不正です");
+
+            }
+            
+            ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
+            return ResponseEntity.status(400).body(response);
+        }
+        
+        @ExceptionHandler(ItemStatusInvalidException.class)
+        public ResponseEntity<ErrorResponse> itemStatusInValidException(ItemStatusInvalidException ex) {
+            ErrorResponse response  = new ErrorResponse("CONFLICT", "アイテムを採用済みにしている必要があります", null);
+            return ResponseEntity.status(409).body(response);
         }
 }

@@ -13,6 +13,9 @@ function RoomPage(){
   const [error,setError]=useState('');
   const [selected,setSelected]=useState<number|null>(null);
   const [memoText,setMemoText]=useState('')
+
+  const total = list.reduce((acc,item) => acc + item.price * item.quantity,0);
+  
   
   return(
     <div className='bg-[#f0e5cc] min-h-screen flex flex-col gap-4 p-8'>
@@ -35,18 +38,34 @@ function RoomPage(){
       
       <hr className='border-t-5' />
      
-      
-      <p className='border w-fit px-2'>提案</p>
+    
+    
+    <div className='flex'>
+        <p className='border w-fit px-2'>提案</p>
+        <p className='border ml-auto px-2'>合計</p>
+        <p className='border-b ml-2 mr-35 tracking-[0.2em]'>{total}円</p>
+    </div>
       <ul>
-        {list.map((item, index) => (
-          <li className='border border-dashed p-3'
+                {list.map((item, index) => (
+          <li className='border border-dashed p-3 flex'
            key={index}
            onClick={()=>{
             setSelected(index);
             setMemoText(item.memo);
-           }}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}</li>
+           }}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}
+            <button
+            className='border px-2 ml-auto cursor-pointer'
+            onClick={(e) => {
+              e.stopPropagation();
+              setList(list.filter((_item, i) => i !== index));
+            }} >削除
+            </button>
+          </li>
           ))}
+          
       </ul>
+
+
     <div className='flex '>
       <input 
       className='border outline-none border-dashed'
@@ -74,9 +93,13 @@ function RoomPage(){
     {error && <p className='text-red-700'>{error}</p>}
       
       <button onClick={()=>{
-        if (name === '' || price === '' || quantity === '') {
+      if (name === '' || price === '' || quantity === '') {
       setError("入力欄をすべて入れてください。");
       return;
+      }
+      if (isNaN(Number(price)) || isNaN(Number(quantity))) {
+        setError("値段と個数は数字で入れてください。");
+        return;
         }
         setList([...list,{text:name,price:Number(price),quantity:Number(quantity),memo:''}]);
         setName('');
