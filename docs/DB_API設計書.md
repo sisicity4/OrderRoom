@@ -1,6 +1,6 @@
 # OrderRoom DB・API設計書
 
-更新日: 2026-07-18
+更新日: 2026-08-02
 
 対象: [MVP仕様](MVP.md)で定義したコア版と統合MVP  
 構成: React + TypeScript / Spring Boot / PostgreSQL / REST JSON
@@ -218,24 +218,27 @@ stateDiagram-v2
 | participantId | 同じroomに存在しなければ404 |
 | hostKey / token | 不一致は403 |
 
-### 5.3 2026-07-22時点の実装差分
+### 5.3 2026-08-02時点の実装差分
 
 実装済み:
 
 - `POST /api/rooms`
+- `GET /api/rooms/{roomId}`
 - `POST /api/rooms/{roomId}/participants`
 - `POST /api/rooms/{roomId}/items`
 - `GET /api/rooms/{roomId}/items`
+- `PATCH /api/rooms/{roomId}/items/{itemId}/status`
+- `PATCH /api/rooms/{roomId}/items/{itemId}/purchased`
+- `GET /api/rooms/{roomId}/summary`
+- `X-Participant-Token`による商品作成者の特定
+- `X-Host-Key`によるstatus・purchased更新の保護
+- Roomの`budgetAmount`と予算差分
 
 未実装または確定仕様との差分:
 
-- `GET /api/rooms/{roomId}` は未実装（Issue #32）。
-- `X-Host-Key` の検証は未実装（Issue #13）。
-- `X-Participant-Token` による本人確認は未実装（Issue #33）。
 - 商品編集・削除は未実装（Issue #34）。
-- `budgetAmount` はRoom Entity/APIへ未反映。
-- 商品作成は本文の `participantId` を使っており、確定仕様のtoken認証へ未移行。
-- ItemStatusは現在JSONで `PROPOSED` と返る。確定API値は小文字の `proposed`。
+- participant tokenによる本人確認は商品作成だけに適用済み。編集・削除への適用は各API実装時に必要。
+- 集計APIは採用済み・提案中見積と予算差分を返すが、FE表示は未接続。
 - 外部DB認証情報なしで自動テストを実行できない。
 
 ### 5.4 保留中のルーム操作
