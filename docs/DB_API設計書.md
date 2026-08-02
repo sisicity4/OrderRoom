@@ -31,6 +31,16 @@
 - UIの「見送り」に対応するAPI値は `rejected`
 - `price`は見積単価、`actualPrice`は商品行全体の実購入額
 
+### Discussion由来の検討事項
+
+以下はGitHub Discussionsで提案・整理された内容であり、MVP確定仕様ではない。
+
+- 参加コード方式を採用する場合、内部主キーの`rooms.id`はUUIDのまま維持し、参加者入力用に`roomCode` / DBカラム`room_code`を追加する。6文字前後の英数字コードはアプリケーション層で生成し、重複時はリトライする。
+- 参加コードは参加の入口であり、ホスト権限には使わない。ホスト操作は引き続き`hostKey`と`X-Host-Key`で保護する。
+- 参加コードからルームを解決するAPIを追加する場合、例として`POST /api/rooms/resolve-code`を検討する。ただし現行MVPでは`/rooms/{roomId}`の共有URL参加を優先する。
+- ホスト承認制を採用する場合、`Participant`に承認状態を追加するか、`JoinRequest`相当の新規モデルを設ける。申請中画面、ホスト向け申請一覧、承認・却下API、承認状態確認手段が必要になる。
+- itemの`memo`は現行仕様では保持するが、room-pageの入力UIを崩す場合は削除または別レイアウト化を検討する。
+
 ## 2. データモデル
 
 ```mermaid
@@ -218,28 +228,30 @@ stateDiagram-v2
 | participantId | 同じroomに存在しなければ404 |
 | hostKey / token | 不一致は403 |
 
-### 5.3 2026-08-02時点の実装差分
+### 5.3 2026-08-03時点の実装差分
 
-実装済み:
+詳細は[実装照合レポート](実装照合レポート.md)と[動作リスク仕様](動作リスク仕様.md)を参照する。
 
-- `POST /api/rooms`
-- `GET /api/rooms/{roomId}`
-- `POST /api/rooms/{roomId}/participants`
-- `POST /api/rooms/{roomId}/items`
-- `GET /api/rooms/{roomId}/items`
-- `PATCH /api/rooms/{roomId}/items/{itemId}/status`
-- `PATCH /api/rooms/{roomId}/items/{itemId}/purchased`
-- `GET /api/rooms/{roomId}/summary`
-- `X-Participant-Token`による商品作成者の特定
-- `X-Host-Key`によるstatus・purchased更新の保護
-- Roomの`budgetAmount`と予算差分
+実装済みまたは部分実装:
+
+- `POST /api/rooms`: 実装済み。ただし`budgetAmount`は未対応。
+- `POST /api/rooms/{roomId}/participants`: 実装済み。参加時にtokenを返す。
+- `POST /api/rooms/{roomId}/items`: 実装済み。ただし提案者特定は`X-Participant-Token`ではなく、リクエスト本文の`participantId`に依存している。
+- `GET /api/rooms/{roomId}/items`: 実装済み。
+- `PATCH /api/rooms/{roomId}/items/{itemId}/status`: 実装済み。`X-Host-Key`検証対象。
+- `PATCH /api/rooms/{roomId}/items/{itemId}/purchased`: 実装済み。`X-Host-Key`検証対象。accepted以外は拒否する。
+- `GET /api/rooms/{roomId}/summary`: 部分実装。rejected以外の合計、参加者別合計、商品別数量を返す。
 
 未実装または確定仕様との差分:
 
+- `GET /api/rooms/{roomId}`は未実装。`RoomResponse`型は作業ツリー上に存在するが、Controller/Serviceに接続されていない。
+- Roomの`budgetAmount`と予算差分は未実装。
+- `X-Participant-Token`による商品作成者の特定は未実装。
 - 商品編集・削除は未実装（Issue #34）。
-- participant tokenによる本人確認は商品作成だけに適用済み。編集・削除への適用は各API実装時に必要。
-- 集計APIは採用済み・提案中見積と予算差分を返すが、FE表示は未接続。
-- 外部DB認証情報なしで自動テストを実行できない。
+- 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
+- 実購入額、購入者、精算対象者、立替精算案、精算済み記録は未実装。
+- FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
+- 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
 
 ### 5.4 保留中のルーム操作
 
@@ -598,6 +610,9 @@ MVP期間は `ddl-auto=update` を暫定利用する。v1.0後にFlywayを導入
 - Flyway導入と `ddl-auto=validate` への移行
 - tokenとhostKeyのローテーション、失効
 - 楽観ロックによる同時編集対策
+- 参加コード`roomCode`、参加コード検索API、コード再発行・無効化
+- ホスト承認制を採用する場合の参加申請モデル、承認・却下API、承認待ち状態確認
+- itemの`memo`を継続するか、UI都合で廃止・別レイアウト化するかの判断
 - 商品と精算の監査履歴
 - レート制限
 - 厳密なアカウント認証
