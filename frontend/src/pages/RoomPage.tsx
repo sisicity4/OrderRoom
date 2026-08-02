@@ -3,6 +3,7 @@ type Proposal={
     text: string;
     quantity: number;
     price: number;
+    memo:string;
   };
 function RoomPage(){
   const [name,setName]=useState('');
@@ -10,6 +11,8 @@ function RoomPage(){
   const [price,setPrice]=useState('');
   const [quantity,setQuantity]=useState('');
   const [error,setError]=useState('');
+  const [selected,setSelected]=useState<number|null>(null);
+  const [memoText,setMemoText]=useState('')
 
   const total = list.reduce((acc,item) => acc + item.price * item.quantity,0);
   
@@ -43,14 +46,21 @@ function RoomPage(){
         <p className='border-b ml-2 mr-35 tracking-[0.2em]'>{total}円</p>
     </div>
       <ul>
-        {list.map((item, index) => (
+                {list.map((item, index) => (
           <li className='border border-dashed p-3 flex'
-            key={index}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}
-            <button 
+           key={index}
+           onClick={()=>{
+            setSelected(index);
+            setMemoText(item.memo);
+           }}>{item.text+" "}{item.price+"円 "}{item.quantity+"個"}
+            <button
             className='border px-2 ml-auto cursor-pointer'
-            onClick={() => setList(list.filter((item, i) => i !== index))} >削除
+            onClick={(e) => {
+              e.stopPropagation();
+              setList(list.filter((_item, i) => i !== index));
+            }} >削除
             </button>
-            </li>
+          </li>
           ))}
           
       </ul>
@@ -91,13 +101,36 @@ function RoomPage(){
         setError("値段と個数は数字で入れてください。");
         return;
         }
-        setList([...list,{text:name,price:Number(price),quantity:Number(quantity)}]);
+        setList([...list,{text:name,price:Number(price),quantity:Number(quantity),memo:''}]);
         setName('');
         setPrice('');
         setQuantity('');
         setError('');
       }}>提案の追加</button>
-    </div>
+
+      {selected !== null && (
+        <div className='fixed inset-0 bg-black/40 flex items-end'
+          onClick={()=>setSelected(null)}>
+          <div className='bg-[#f0e5cc] w-full rounded-t-2xl p-6 flex flex-col gap-3'
+            onClick={(e)=>e.stopPropagation()}>
+            <p className='border w-fit px-2'>メモ</p>
+            <h2 className='text-xl font-bold'>{list[selected].text}</h2>
+            <textarea
+              className='border border-dashed outline-none p-2 h-32'
+              value={memoText}
+              placeholder='メモを記入'
+              onChange={(e)=>setMemoText(e.target.value)} />
+            <div className='flex gap-4'>
+              <button onClick={()=>{
+                setList(list.map((item,i)=> i===selected ? {...item,memo:memoText} : item));
+                setSelected(null);
+              }}>保存</button>
+              <button onClick={()=>setSelected(null)}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
+        </div>
 
   );
   
