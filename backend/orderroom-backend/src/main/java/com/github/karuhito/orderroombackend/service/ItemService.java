@@ -1,5 +1,6 @@
 package com.github.karuhito.orderroombackend.service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -133,11 +134,11 @@ public class ItemService {
 
         // 参加者ごとのグループ化+合計金額
         Map<UUID, List<Item>> itemsByParticipantId = filteredItems.stream().collect(Collectors.groupingBy(item -> item.getParticipant().getId()));
-        List<ParticipantSummary> participantSummaries = itemsByParticipantId.entrySet().stream().map(entry -> new ParticipantSummary(entry.getKey(), entry.getValue().get(0).getParticipant().getName(), entry.getValue().stream().mapToInt(item -> item.getPrice() * item.getQuantity()).sum())).toList();
+        List<ParticipantSummary> participantSummaries = itemsByParticipantId.entrySet().stream().sorted(Comparator.comparing(entry ->  entry.getValue().get(0).getParticipant().getCreatedAt())).map(entry -> new ParticipantSummary(entry.getKey(), entry.getValue().get(0).getParticipant().getName(), entry.getValue().stream().mapToInt(item -> item.getPrice() * item.getQuantity()).sum())).toList();
         
         // 商品名ごとのグループ化+合計数量
         Map<String, List<Item>> itemsByName = filteredItems.stream().collect(Collectors.groupingBy(item -> item.getName()));
-        List<ItemNameSummary> itemNameSummaries = itemsByName.entrySet().stream().map(entry -> new ItemNameSummary(entry.getKey(), entry.getValue().stream().mapToInt(item -> item.getQuantity()).sum())).toList();
+        List<ItemNameSummary> itemNameSummaries = itemsByName.entrySet().stream().sorted(Comparator.comparing(entry -> entry.getKey())).map(entry -> new ItemNameSummary(entry.getKey(), entry.getValue().stream().mapToInt(item -> item.getQuantity()).sum())).toList();
 
         return new ItemSummaryResponse(totalPrice, participantSummaries, itemNameSummaries);
     }
