@@ -244,7 +244,7 @@ stateDiagram-v2
 
 未実装または確定仕様との差分:
 
-- `GET /api/rooms/{roomId}`は未実装。`RoomResponse`型は作業ツリー上に存在するが、Controller/Serviceに接続されていない。
+- `GET /api/rooms/{roomId}`は未実装。Controller/Serviceに接続されたルーム情報取得APIは存在しない。
 - Roomの`budgetAmount`と予算差分は未実装。
 - `X-Participant-Token`による商品作成者の特定は未実装。
 - 商品編集・削除は未実装（Issue #34）。
