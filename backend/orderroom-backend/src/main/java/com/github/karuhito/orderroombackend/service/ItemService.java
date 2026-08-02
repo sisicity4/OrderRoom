@@ -1,13 +1,19 @@
 package com.github.karuhito.orderroombackend.service;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateItemResponse;
 import com.github.karuhito.orderroombackend.dto.ItemListResponse;
+import com.github.karuhito.orderroombackend.dto.ItemNameSummary;
+import com.github.karuhito.orderroombackend.dto.ItemSummaryResponse;
+import com.github.karuhito.orderroombackend.dto.ParticipantSummary;
 import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
 import com.github.karuhito.orderroombackend.entity.Room;
@@ -21,6 +27,7 @@ import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
+
 
 @Service
 
@@ -113,5 +120,26 @@ public class ItemService {
             updatedItem.getCreatedAt(), 
             updatedItem.getUpdatedAt()
         );
+    }
+
+    public ItemSummaryResponse getItemSummary(UUID roomId) {
+        // ルームIDの存在チェック
+        roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
+        // ルーム内のアイテム一覧を取得
+        List<Item> items = itemRepository.findByRoomId(roomId);
+
+        // StatusがREJECTED以外のアイテムに絞り込む
+        List<Item> filteredItems = items.stream().filter(item -> item.getStatus() != ItemStatus.REJECTED).toList();
+        int totalPrice = filteredItems.stream().mapToInt(item -> item.getPrice() * item.getQuantity()).sum();
+
+        // 参加者ごとのグループ化+合計金額
+        Map<UUID, List<Item>> itemsByParticipantId = filteredItems.stream().collect(Collectors.groupingBy(item -> item.getParticipant().getId()));
+        List<ParticipantSummary> participantSummaries = itemsByParticipantId.entrySet().stream().sorted(Comparator.comparing(entry ->  entry.getValue().get(0).getParticipant().getCreatedAt())).map(entry -> new ParticipantSummary(entry.getKey(), entry.getValue().get(0).getParticipant().getName(), entry.getValue().stream().mapToInt(item -> item.getPrice() * item.getQuantity()).sum())).toList();
+        
+        // 商品名ごとのグループ化+合計数量
+        Map<String, List<Item>> itemsByName = filteredItems.stream().collect(Collectors.groupingBy(item -> item.getName()));
+        List<ItemNameSummary> itemNameSummaries = itemsByName.entrySet().stream().sorted(Comparator.comparing(entry -> entry.getKey())).map(entry -> new ItemNameSummary(entry.getKey(), entry.getValue().stream().mapToInt(item -> item.getQuantity()).sum())).toList();
+
+        return new ItemSummaryResponse(totalPrice, participantSummaries, itemNameSummaries);
     }
 }
