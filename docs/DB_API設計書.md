@@ -1,6 +1,6 @@
 # OrderRoom DB・API設計書
 
-更新日: 2026-07-18
+更新日: 2026-08-02
 
 対象: [MVP仕様](MVP.md)で定義したコア版と統合MVP  
 構成: React + TypeScript / Spring Boot / PostgreSQL / REST JSON
@@ -30,6 +30,16 @@
 - 提案中は `proposed`。`pending`は使用しない
 - UIの「見送り」に対応するAPI値は `rejected`
 - `price`は見積単価、`actualPrice`は商品行全体の実購入額
+
+### Discussion由来の検討事項
+
+以下はGitHub Discussionsで提案・整理された内容であり、MVP確定仕様ではない。
+
+- 参加コード方式を採用する場合、内部主キーの`rooms.id`はUUIDのまま維持し、参加者入力用に`roomCode` / DBカラム`room_code`を追加する。6文字前後の英数字コードはアプリケーション層で生成し、重複時はリトライする。
+- 参加コードは参加の入口であり、ホスト権限には使わない。ホスト操作は引き続き`hostKey`と`X-Host-Key`で保護する。
+- 参加コードからルームを解決するAPIを追加する場合、例として`POST /api/rooms/resolve-code`を検討する。ただし現行MVPでは`/rooms/{roomId}`の共有URL参加を優先する。
+- ホスト承認制を採用する場合、`Participant`に承認状態を追加するか、`JoinRequest`相当の新規モデルを設ける。申請中画面、ホスト向け申請一覧、承認・却下API、承認状態確認手段が必要になる。
+- itemの`memo`は現行仕様では保持する。FEではroom-pageの入力UIを崩さないため、ボトムシート形式で確認・編集する案がマージ済み。ただしAPI接続・永続化は未実装。
 
 ## 2. データモデル
 
@@ -149,6 +159,7 @@ stateDiagram-v2
 - 参加APIの成功時に一度だけ返す
 - FEは `orderroom.participantToken.{roomId}` のようにroom単位でlocalStorageへ保存する
 - 商品作成、編集、削除、参加者本人の精算済み操作で送る
+- 幹事が参加者として提案する場合も、幹事自身のparticipant tokenを使って提案者を特定する
 - 一覧APIやエラーログへ出さない
 - リクエスト本文のparticipantIdを本人確認に使わない
 
@@ -157,9 +168,46 @@ stateDiagram-v2
 - ルーム作成APIの成功時に一度だけ返す
 - FEはホストURLのkeyをsessionStorageへ移し、可能ならURLから除去する
 - ホスト操作では `X-Host-Key` を送る
+- 幹事が参加者として登録しても、採用、見送り、提案中へ戻す、購入済み変更、全提案の編集・削除ではhostKeyによる管理権限を維持する
 - 通常のルーム取得、参加、一覧レスポンスへ含めない
 
-### 4.3 エラー
+### 4.3 幹事の2つの役割
+
+幹事は、参加者としての役割と、管理者としての役割を同時に持てる。
+
+#### 参加者としての幹事
+
+幹事自身が「買いたいもの」を提案するための役割。
+
+- できること
+  - 自分の提案を追加する
+  - 自分の提案を編集する
+  - 自分の提案を削除する
+- 使う認証
+  - `X-Participant-Token`
+
+#### 管理者としての幹事
+
+ルーム全体を管理するための役割。
+
+- できること
+  - 任意の提案を編集する
+  - 任意の提案を削除する
+  - 提案を採用する
+  - 提案を今回は見送る
+  - 提案を提案中に戻す
+  - 採用済み提案を購入済みにする
+  - 購入済み提案を未購入に戻す
+- 使う認証
+  - `X-Host-Key`
+
+補足:
+
+- 商品提案の作成者はparticipant tokenから決定するため、幹事も提案するには参加者登録が必要。
+- 幹事が参加者として登録しても、hostKeyによる管理者権限は失わない。
+- hostKeyはparticipant tokenの代替ではない。participant tokenはhostKeyの代替ではない。
+
+### 4.4 エラー
 
 - tokenまたはhostKeyの欠如・不一致: 403
 - ルーム、参加者、商品、精算の不存在: 404
@@ -218,25 +266,30 @@ stateDiagram-v2
 | participantId | 同じroomに存在しなければ404 |
 | hostKey / token | 不一致は403 |
 
-### 5.3 2026-07-22時点の実装差分
+### 5.3 2026-08-03時点の実装差分
 
-実装済み:
+詳細は[実装照合レポート](実装照合レポート.md)と[動作リスク仕様](動作リスク仕様.md)を参照する。
 
-- `POST /api/rooms`
-- `POST /api/rooms/{roomId}/participants`
-- `POST /api/rooms/{roomId}/items`
-- `GET /api/rooms/{roomId}/items`
+実装済みまたは部分実装:
+
+- `POST /api/rooms`: 実装済み。ただし`budgetAmount`は未対応。
+- `POST /api/rooms/{roomId}/participants`: 実装済み。参加時にtokenを返す。
+- `POST /api/rooms/{roomId}/items`: 実装済み。ただし提案者特定は`X-Participant-Token`ではなく、リクエスト本文の`participantId`に依存している。
+- `GET /api/rooms/{roomId}/items`: 実装済み。
+- `PATCH /api/rooms/{roomId}/items/{itemId}/status`: 実装済み。`X-Host-Key`検証対象。
+- `PATCH /api/rooms/{roomId}/items/{itemId}/purchased`: 実装済み。`X-Host-Key`検証対象。accepted以外は拒否する。
+- `GET /api/rooms/{roomId}/summary`: 部分実装。rejected以外の合計、参加者別合計、商品別数量を返す。
 
 未実装または確定仕様との差分:
 
-- `GET /api/rooms/{roomId}` は未実装（Issue #32）。
-- `X-Host-Key` の検証は未実装（Issue #13）。
-- `X-Participant-Token` による本人確認は未実装（Issue #33）。
+- `GET /api/rooms/{roomId}`は未実装。Controller/Serviceに接続されたルーム情報取得APIは存在しない。
+- Roomの`budgetAmount`と予算差分は未実装。
+- `X-Participant-Token`による商品作成者の特定は未実装。
 - 商品編集・削除は未実装（Issue #34）。
-- `budgetAmount` はRoom Entity/APIへ未反映。
-- 商品作成は本文の `participantId` を使っており、確定仕様のtoken認証へ未移行。
-- ItemStatusは現在JSONで `PROPOSED` と返る。確定API値は小文字の `proposed`。
-- 外部DB認証情報なしで自動テストを実行できない。
+- 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
+- 実購入額、購入者、精算対象者、立替精算案、精算済み記録は未実装。
+- FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
+- 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
 
 ### 5.4 保留中のルーム操作
 
@@ -260,10 +313,10 @@ stateDiagram-v2
 | --- | --- | --- | --- |
 | POST | `/api/rooms/{roomId}/items` | 参加者 | 商品提案 |
 | GET | `/api/rooms/{roomId}/items` | 参加者またはホスト | 商品一覧 |
-| PATCH | `/api/rooms/{roomId}/items/{itemId}` | 提案者またはホスト | 商品内容編集 |
+| PATCH | `/api/rooms/{roomId}/items/{itemId}` | 提案者またはホスト | 商品名、見積単価、数量、メモの編集 |
 | DELETE | `/api/rooms/{roomId}/items/{itemId}` | 提案者またはホスト | 商品削除 |
-| PATCH | `/api/rooms/{roomId}/items/{itemId}/status` | ホスト | 採用・見送り |
-| PATCH | `/api/rooms/{roomId}/items/{itemId}/purchased` | ホスト | 購入済み変更 |
+| PATCH | `/api/rooms/{roomId}/items/{itemId}/status` | ホスト | 採用、今回は見送る、提案中に戻す |
+| PATCH | `/api/rooms/{roomId}/items/{itemId}/purchased` | ホスト | 購入済み変更。acceptedのみ可 |
 | PATCH | `/api/rooms/{roomId}/items/{itemId}/purchase-detail` | ホスト | 実購入額・購入者 |
 | GET | `/api/rooms/{roomId}/summary` | 参加者またはホスト | 見積・予算集計 |
 
@@ -369,7 +422,7 @@ Query:
 
 ### 7.6 PATCH 商品内容
 
-参加者は `X-Participant-Token`、ホストは `X-Host-Key` を送る。
+参加者は `X-Participant-Token`、ホストは `X-Host-Key` を送る。幹事が参加者として自分の提案を編集する場合は`X-Participant-Token`、管理者として任意の提案を編集する場合は`X-Host-Key`を送る。
 
 ```json
 {
@@ -380,10 +433,15 @@ Query:
 }
 ```
 
+- 編集対象はname、price、quantity、memoだけとする
 - 参加者は自分の提案だけ操作できる
+- ホストは全提案を操作できる
+- 他の参加者は他人の提案を操作できず403を返す
 - 参加者がacceptedを編集するとproposedへ戻す
 - proposedへ戻すときはpurchased=falseとし、actualPriceと購入者をクリアする
+- ホスト編集ではstatusを維持できる
 - status、purchased、actualPrice、paidByParticipantIdはこのAPIで変更しない
+- 編集キャンセルはFE内で処理し、保存リクエストを送らない
 
 ### 7.7 PATCH status・purchased
 
@@ -393,6 +451,14 @@ Header: `X-Host-Key`
 { "status": "accepted" }
 ```
 
+statusは次の3値を受け付ける。
+
+| API値 | UI表示 | 意味 |
+| --- | --- | --- |
+| `proposed` | 提案中に戻す | 再検討対象に戻す |
+| `accepted` | 採用 | 買い物・採用済み合計の対象にする |
+| `rejected` | 今回は見送る | 通常一覧と集計から除外する |
+
 ```json
 { "purchased": true }
 ```
@@ -400,6 +466,8 @@ Header: `X-Host-Key`
 accepted以外をpurchased=trueにする要求は400とする。
 
 purchasedをfalseへ戻した場合はactualPriceとpaidByParticipantIdをNULLへ戻す。精算済みがある場合は変更を409で拒否する。
+
+status変更、purchased変更、編集、削除の後は、FEが一覧とsummaryを再取得するか、同等の計算で一覧、採用済み合計、提案中合計、予算との差額を即時更新する。
 
 ### 7.8 PATCH purchase-detail
 
@@ -583,7 +651,16 @@ MVP期間は `ddl-auto=update` を暫定利用する。v1.0後にFlywayを導入
 - ルーム作成、参加、商品権限、状態遷移、集計、精算をテストする
 - 他ルームのtoken、hostKey、participantIdを拒否する
 - participant tokenとhostKeyがレスポンスやログへ漏れない
+- 幹事が参加者として登録し、自分の提案を追加できる
+- 幹事は参加者として登録しても、採用、今回は見送る、提案中に戻す、購入済み変更の管理操作ができる
+- 提案者本人、幹事、第三者の3パターンで編集・削除権限を確認する
+- 第三者は他人の提案を編集・削除できない
+- 編集対象がname、price、quantity、memoに限定されている
+- 削除前確認、編集キャンセル時の元データ保持をFEで確認する
+- 編集、削除、採用、見送り、提案中へ戻す、購入状態変更後にsummaryが正しく更新される
 - 予算未設定、0円、超過を確認する
+- `npm run lint`、`npm run build`、バックエンドテストがすべて成功する
+- ローカル起動で、幹事作成 → 幹事参加 → 提案追加 → 編集 → 採用 → 購入済み → 削除までを確認する
 - 1円、割り切れない合計、複数購入者、対象者1人を確認する
 - 精算済み後の変更ロックとresetを確認する
 - 本番でHealth API、DB接続、CORS、SPA直接アクセスを確認する
@@ -595,6 +672,9 @@ MVP期間は `ddl-auto=update` を暫定利用する。v1.0後にFlywayを導入
 - Flyway導入と `ddl-auto=validate` への移行
 - tokenとhostKeyのローテーション、失効
 - 楽観ロックによる同時編集対策
+- 参加コード`roomCode`、参加コード検索API、コード再発行・無効化
+- ホスト承認制を採用する場合の参加申請モデル、承認・却下API、承認待ち状態確認
+- itemの`memo`を継続するか、UI都合で廃止・別レイアウト化するかの判断
 - 商品と精算の監査履歴
 - レート制限
 - 厳密なアカウント認証
