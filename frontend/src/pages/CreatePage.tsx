@@ -6,18 +6,29 @@ function CreatePage() {
   const [eventDate, setEventDate] = useState('');
   const [memo, setMemo] = useState('');
   const [budgetAmount,setBudgetAmount]=useState('');
+  const [error,setError]=useState('')
   const navigate=useNavigate();
-  const handleCreate = async () => {
-  const res = await fetch('api/rooms',{
-    method:'POST',
-    headers: {'Content-Type':'/application/json'},
-    body:JSON.stringify({title,eventDate,memo})
-    })
-    const data = await res.json()
-    console.log(data)
-    navigate(`/rooms/${data.roomId}`)
+    const handleCreate = async () => {
+    if (title.trim() === '') {
+      setError('ルーム名を入力してください。');
+      return;
+    }
+    const res = await fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        eventDate: eventDate === '' ? null : eventDate,
+        memo,
+      }),
+    });
+    if (!res.ok) {
+      setError('ルームの作成に失敗しました。');
+      return;
+    }
+    const data = await res.json();
+    navigate(`/rooms/${data.id}`);
   }
-
   return (
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
       <h3 className='tracking-[1.6em] text-[#7A6B57]'>開店</h3>
@@ -34,6 +45,7 @@ function CreatePage() {
        onChange={(e) =>
        setEventDate(e.target.value)
        } />
+      
 
       
       </div>
@@ -72,12 +84,13 @@ function CreatePage() {
       </div>
       
       <hr className='border-t-5' />
+      {error && <p className='text-red-700'>{error}</p>}
     <div className='flex'>
       <div className='flex flex-col tracking-[0.2em] text-[#7A6B57]'>
         <span>発券後に</span>
         <span>URLが払い出されます。</span>
       </div>
-      <button onClick={() => navigate('/rooms/test-123')}
+      <button onClick={handleCreate}
         className=' ml-auto border-2 w-16 h-16 text-red-700 rounded-full
         [writing-mode:vertical-rl] -rotate-12 font-bold cursor-pointer'>作成
       </button>
