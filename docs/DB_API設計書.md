@@ -246,11 +246,12 @@ stateDiagram-v2
 | HTTP | `error` | 状態 | 用途 |
 | --- | --- | --- | --- |
 | 400 | `VALID_ERROR` | 実装済み | Bean Validation失敗 |
+| 400 | `INVALID_ITEM_STATE` | 未実装 | accepted以外の商品をpurchased=trueにしようとした |
 | 400 | `TYPE_MISMATCH` | 実装済み | roomIdなどの型不正 |
-| 403 | `FORBIDDEN` | 未実装 | token、hostKey、操作権限の不一致 |
+| 403 | `FORBIDDEN` | 実装済み | token、hostKey、操作権限の不一致 |
 | 404 | `ROOM_NOT_FOUND` | 実装済み | ルーム不存在 |
 | 404 | `PARTICIPANT_NOT_FOUND` | 実装済み | 参加者不存在、または別ルームの参加者 |
-| 404 | `ITEM_NOT_FOUND` | 未実装 | 商品不存在 |
+| 404 | `ITEM_NOT_FOUND` | 実装済み | 商品不存在 |
 | 409 | `CONFLICT` | 未実装 | 精算済みなど、現在状態と操作の競合 |
 
 ### 5.2 バリデーション
@@ -270,26 +271,23 @@ stateDiagram-v2
 
 詳細は[実装照合レポート](実装照合レポート.md)と[動作リスク仕様](動作リスク仕様.md)を参照する。
 
-実装済みまたは部分実装:
-
-- `POST /api/rooms`: 実装済み。ただし`budgetAmount`は未対応。
-- `POST /api/rooms/{roomId}/participants`: 実装済み。参加時にtokenを返す。
-- `POST /api/rooms/{roomId}/items`: 実装済み。ただし提案者特定は`X-Participant-Token`ではなく、リクエスト本文の`participantId`に依存している。
-- `GET /api/rooms/{roomId}/items`: 実装済み。
-- `PATCH /api/rooms/{roomId}/items/{itemId}/status`: 実装済み。`X-Host-Key`検証対象。
-- `PATCH /api/rooms/{roomId}/items/{itemId}/purchased`: 実装済み。`X-Host-Key`検証対象。accepted以外は拒否する。
-- `GET /api/rooms/{roomId}/summary`: 部分実装。rejected以外の合計、参加者別合計、商品別数量を返す。
-
 未実装または確定仕様との差分:
 
 - `GET /api/rooms/{roomId}`は未実装。Controller/Serviceに接続されたルーム情報取得APIは存在しない。
+- `GET /api/rooms/{roomId}/participants`は未実装。Controller/Serviceに参加者一覧取得APIは存在しない。
 - Roomの`budgetAmount`と予算差分は未実装。
 - `X-Participant-Token`による商品作成者の特定は未実装。
+- `GET /api/rooms/{roomId}/items`と`GET /api/rooms/{roomId}/summary`は、確定仕様では参加者またはホスト認証を想定しているが、現実装では認証ヘッダを検証していない。
 - 商品編集・削除は未実装（Issue #34）。
 - 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
+- 現行実装のsummaryレスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、7.9の確定仕様とは互換性がない。
+- accepted以外の商品に対する`PATCH /api/rooms/{roomId}/items/{itemId}/purchased`は、確定仕様では`purchased=true`を400 `INVALID_ITEM_STATE`で拒否するが、現実装では`purchased`の値に関わらず409 `CONFLICT`を返す。
 - 実購入額、購入者、精算対象者、立替精算案、精算済み記録は未実装。
 - FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
 - 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
+- ItemStatusのJSON表現は確定仕様では小文字（`proposed` / `accepted` / `rejected`）だが、現実装ではJava enum名の大文字（`PROPOSED` / `ACCEPTED` / `REJECTED`）で扱われる。レスポンス、リクエストボディ、`GET /api/rooms/{roomId}/items?status=`のクエリパラメータを小文字へ統一する必要がある（Issue #74）。
+
+
 
 ### 5.4 保留中のルーム操作
 
@@ -463,7 +461,7 @@ statusは次の3値を受け付ける。
 { "purchased": true }
 ```
 
-accepted以外をpurchased=trueにする要求は400とする。
+accepted以外の商品をpurchased=trueにする要求は400 `INVALID_ITEM_STATE` とする。
 
 purchasedをfalseへ戻した場合はactualPriceとpaidByParticipantIdをNULLへ戻す。精算済みがある場合は変更を409で拒否する。
 
@@ -483,6 +481,7 @@ Header: `X-Host-Key`
 actualPriceは単価ではなく、この商品行全体の実支払額である。
 
 ### 7.9 GET `/api/rooms/{roomId}/summary`
+現行実装差分: 2026-08-03時点の実装レスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、accepted/proposed別集計、予算差分、byStatus、acceptedItemCount、estimatedTotalPriceは未実装。
 
 ```json
 {
