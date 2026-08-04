@@ -1,52 +1,83 @@
 import { useState } from "react";
-
+import { useNavigate } from 'react-router-dom';
 function JoinPage() {
-  const [name,setName]=useState('');
-  const [url,setUrl]=useState('');
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const handleJoin = async () => {
+    if (name.trim() === '') {
+      setError('名前を入力してください。');
+      return;
+    }
+    const roomId = url.trim().replace(/\/$/, '').split('/').pop() ?? '';
+    if (roomId === '') {
+      setError('伝票番号を入力してください。');
+      return;
+    }
+    const res = await fetch(`/api/rooms/${roomId}/participants`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name
+      }),
+
+    });
+
+    if (!res.ok) {
+      setError('ルームへの参加に失敗しました。');
+      return;
+    }
+    const data = await res.json();
+    localStorage.setItem(`participant:${roomId}`, JSON.stringify({ id: data.id, token: data.token }));
+    navigate(`/rooms/${roomId}`);
+  }
   return (
- <div className='flex flex-col gap-4 p-8 bg-[#f0e5cc] min-h-screen'>
+    <div className='flex flex-col gap-4 p-8 bg-[#f0e5cc] min-h-screen'>
       <p className='text-[#7A6B57] tracking-[1em]'>相席</p>
       <p className='text-[#7A6B57] tracking-[1em]'>るーむさんか</p>
       <h1 className='text-4xl font-bold'>ルーム参加</h1>
 
-    <div className='flex self-center py-4'>    {/*名前入力欄*/}
-      <p className='border w-fit px-2 mr-2'>名前</p>
-      <input
-      className='border-b outline-none w-55'
-      placeholder="名前を入力"
-      type="text"
-      value={name}
-      onChange={(e) => setName(e.target.value)}/>
-    </div>
+      <div className='flex self-center py-4'>    {/*名前入力欄*/}
+        <p className='border w-fit px-2 mr-2'>名前</p>
+        <input
+          className='border-b outline-none w-55'
+          placeholder="名前を入力"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)} />
+      </div>
+
+      <hr className='border-t-5' />
+      {error && <p className='text-red-700'>{error}</p>}
+
+      <div> {/*URL入力処理*/}
+        <p className='border px-3 w-fit mb-2'>伝票番号</p>
+        <input
+          className='border-b outline-none w-70'
+          placeholder="URLを入力"
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)} />
+      </div>
 
       <hr className='border-t-5' />
 
-    <div> {/*URL入力処理*/}
-      <p className='border px-3 w-fit mb-2'>伝票番号</p>
-       <input
-      className='border-b outline-none w-70'
-      placeholder="URLを入力"
-      type="text"
-      value={url}
-      onChange={(e) => setUrl(e.target.value)} />
-    </div>
-
-    <hr className='border-t-5' />
-
-    <div className='flex'>
-      <div className='flex flex-col'>
-        <p className='tracking-[0.8em] text-[#7A6B57]'>相席のうえ</p>
-        <p className='tracking-[0.8em] text-[#7A6B57]'>注文票を共有します</p> 
-      </div>
-      <button
-       className='ml-auto border-2 w-16 h-16 rounded-full text-red-700
+      <div className='flex'>
+        <div className='flex flex-col'>
+          <p className='tracking-[0.8em] text-[#7A6B57]'>相席のうえ</p>
+          <p className='tracking-[0.8em] text-[#7A6B57]'>注文票を共有します</p>
+        </div>
+        <button
+          className='ml-auto border-2 w-16 h-16 rounded-full text-red-700
        [writing-mode:vertical-rl] -rotate-12 font-bold'
-       onClick={() => console.log({name,url})}>参加</button>
+          onClick={handleJoin}>参加</button>
+      </div>
+
+
+
     </div>
-
-
-
- </div>
 
 
   );
