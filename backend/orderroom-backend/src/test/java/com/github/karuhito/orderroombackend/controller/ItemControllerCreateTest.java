@@ -62,7 +62,7 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.name").value("テストアイテム"))
         .andExpect(jsonPath("$.price").value(2000))
         .andExpect(jsonPath("$.quantity").value(1))
-        .andExpect(jsonPath("$.status").value("PROPOSED"))
+        .andExpect(jsonPath("$.status").value("proposed"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
