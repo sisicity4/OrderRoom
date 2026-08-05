@@ -267,7 +267,7 @@ stateDiagram-v2
 | participantId | 同じroomに存在しなければ404 |
 | hostKey / token | 不一致は403 |
 
-### 5.3 2026-08-03時点の実装差分
+### 5.3 2026-08-05時点の実装差分
 
 詳細は[実装照合レポート](実装照合レポート.md)と[動作リスク仕様](動作リスク仕様.md)を参照する。
 
@@ -285,7 +285,6 @@ stateDiagram-v2
 - 実購入額、購入者、精算対象者、立替精算案、精算済み記録は未実装。
 - FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
 - 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
-- ItemStatusのJSON表現は確定仕様では小文字（`proposed` / `accepted` / `rejected`）だが、現実装ではJava enum名の大文字（`PROPOSED` / `ACCEPTED` / `REJECTED`）で扱われる。レスポンス、リクエストボディ、`GET /api/rooms/{roomId}/items?status=`のクエリパラメータを小文字へ統一する必要がある（Issue #74）。
 
 
 
