@@ -81,7 +81,7 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("ACCEPTED"))
+        .andExpect(jsonPath("$.status").value("accepted"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
@@ -119,7 +119,7 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("REJECTED"))
+        .andExpect(jsonPath("$.status").value("rejected"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
@@ -159,7 +159,7 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("PROPOSED"))
+        .andExpect(jsonPath("$.status").value("proposed"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
@@ -198,7 +198,7 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("ACCEPTED"))
+        .andExpect(jsonPath("$.status").value("accepted"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());

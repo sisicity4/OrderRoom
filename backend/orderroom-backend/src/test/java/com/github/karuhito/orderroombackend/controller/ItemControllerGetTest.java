@@ -69,7 +69,7 @@ public class ItemControllerGetTest {
         .andExpect(jsonPath("$[0].price").value(200))
         .andExpect(jsonPath("$[0].quantity").value(1))
         .andExpect(jsonPath("$[0].memo").value("1.5リットル"))
-        .andExpect(jsonPath("$[0].status").value("PROPOSED"))
+        .andExpect(jsonPath("$[0].status").value("proposed"))
         .andExpect(jsonPath("$[0].purchased").value(false))
         .andExpect(jsonPath("$[0].createdAt").exists())
         .andExpect(jsonPath("$[0].updatedAt").exists())
@@ -82,7 +82,7 @@ public class ItemControllerGetTest {
         .andExpect(jsonPath("$[1].price").value(150))
         .andExpect(jsonPath("$[1].quantity").value(2))
         .andExpect(jsonPath("$[1].memo").value(nullValue()))
-        .andExpect(jsonPath("$[1].status").value("PROPOSED"))
+        .andExpect(jsonPath("$[1].status").value("proposed"))
         .andExpect(jsonPath("$[1].purchased").value(false))
         .andExpect(jsonPath("$[1].createdAt").exists())
         .andExpect(jsonPath("$[1].updatedAt").exists());
