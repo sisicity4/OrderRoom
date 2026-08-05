@@ -81,7 +81,7 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("ACCEPTED"))
+        .andExpect(jsonPath("$.status").value("accepted"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
@@ -119,7 +119,7 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("REJECTED"))
+        .andExpect(jsonPath("$.status").value("rejected"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
@@ -159,7 +159,7 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("PROPOSED"))
+        .andExpect(jsonPath("$.status").value("proposed"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
@@ -198,11 +198,38 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.price").value(100))
         .andExpect(jsonPath("$.quantity").value(1))
         .andExpect(jsonPath("$.memo").value(nullValue()))
-        .andExpect(jsonPath("$.status").value("ACCEPTED"))
+        .andExpect(jsonPath("$.status").value("accepted"))
         .andExpect(jsonPath("$.purchased").value(false))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
     }
+
+    // 正常系3: 生JSONの小文字statusを受理
+    @Test 
+    void updateStatusWithLowercaseJson() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        UUID hostKey = room.getHostKey();
+
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+
+        Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
+        item.setStatus(ItemStatus.PROPOSED);
+        itemRepository.save(item);
+        UUID itemId = item.getId();
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/status", roomId, itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"status\": \"accepted\"}")
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("accepted"));
+    }
+
     // 異常系1: X-Host-Key欠如 → 403 FORBIDDEN（interceptor経由）
     @Test
     void updateStatusMissingHostKey() throws Exception{

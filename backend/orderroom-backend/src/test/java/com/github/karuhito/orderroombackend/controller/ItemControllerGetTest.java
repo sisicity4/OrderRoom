@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.github.karuhito.orderroombackend.entity.Item;
+import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
@@ -41,7 +42,8 @@ public class ItemControllerGetTest {
     * ルームのアイテム一覧の取得のテスト
     */
 
-    @Test // 正常系
+    // 正常系
+    @Test // 1.複数のアイテムを問題なく取得できる
     void getItems() throws Exception {
         Room room = new Room("テストルーム");
         roomRepository.save(room);
@@ -69,7 +71,7 @@ public class ItemControllerGetTest {
         .andExpect(jsonPath("$[0].price").value(200))
         .andExpect(jsonPath("$[0].quantity").value(1))
         .andExpect(jsonPath("$[0].memo").value("1.5リットル"))
-        .andExpect(jsonPath("$[0].status").value("PROPOSED"))
+        .andExpect(jsonPath("$[0].status").value("proposed"))
         .andExpect(jsonPath("$[0].purchased").value(false))
         .andExpect(jsonPath("$[0].createdAt").exists())
         .andExpect(jsonPath("$[0].updatedAt").exists())
@@ -82,12 +84,46 @@ public class ItemControllerGetTest {
         .andExpect(jsonPath("$[1].price").value(150))
         .andExpect(jsonPath("$[1].quantity").value(2))
         .andExpect(jsonPath("$[1].memo").value(nullValue()))
-        .andExpect(jsonPath("$[1].status").value("PROPOSED"))
+        .andExpect(jsonPath("$[1].status").value("proposed"))
         .andExpect(jsonPath("$[1].purchased").value(false))
         .andExpect(jsonPath("$[1].createdAt").exists())
         .andExpect(jsonPath("$[1].updatedAt").exists());
     }
 
+    @Test // 正常系2. クエリパラメータの小文字statusで絞り込み
+    void getItemsFilteredByStatus() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+
+        // acceptedのアイテムを2件、proposedのアイテムを1件作成
+        Item item1 = new Item(room, participant, "コーラ", 200, 1, "1.5リットル");
+        item1.setStatus(ItemStatus.ACCEPTED);
+        itemRepository.save(item1);
+        
+        Item item2 = new Item(room, participant, "ポテチ", 150, 2, null);
+        item2.setStatus(ItemStatus.ACCEPTED);
+        itemRepository.save(item2);
+
+        Item item3 = new Item(room, participant, "麦茶", 150, 3, null);
+        item3.setStatus(ItemStatus.PROPOSED);
+        itemRepository.save(item3);
+        
+        mockMvc.perform(
+            get("/api/rooms/{roomId}/items", roomId)
+            // statusが小文字で絞り込んで確認する
+            .param("status","accepted")
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(jsonPath("$[0].status").value("accepted"));
+        
+    }
+    
+    // 異常系
     @Test // 1. roomIdが実在しない
     void getItemsNotFoundRoom() throws Exception {
         UUID roomId = UUID.fromString("00000000-0000-0000-0000-000000000000");
