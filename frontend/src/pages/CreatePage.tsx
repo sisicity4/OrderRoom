@@ -8,6 +8,9 @@ function CreatePage() {
   const [budgetAmount, setBudgetAmount] = useState('');
   const [error, setError] = useState('')
   const navigate = useNavigate();
+  const [copied, setCopied] = useState(false);
+  const [id, setId] = useState('');
+  const [participantUrl, setParticipantUrl] = useState('');
   const handleCreate = async () => {
     if (title.trim() === '') {
       setError('ルーム名を入力してください。');
@@ -27,7 +30,9 @@ function CreatePage() {
       return;
     }
     const data = await res.json();
-    navigate(`/rooms/${data.id}`);
+    localStorage.setItem(`host:${data.id}`, data.hostKey);
+    setId(data.id);
+    setParticipantUrl(data.participantUrl);
   }
   return (
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
@@ -85,12 +90,35 @@ function CreatePage() {
 
       <hr className='border-t-5' />
       {error && <p className='text-red-700'>{error}</p>}
+      {id && (
+        <div className='flex flex-col gap-2 border border-dashed p-4'>
+          <p className='border w-fit px-2'>伝票番号</p>
+          <p className='break-all text-sm'>{participantUrl}</p>
+          <div className='flex gap-2'>
+            <button
+              className='border px-3 py-1 cursor-pointer'
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(participantUrl);
+                  setCopied(true);
+                } catch {
+                  setError('コピーできませんでした。URLを長押しして選択してください。');
+                }
+              }}>URLをコピー</button>
+            <button
+              className='border px-3 py-1 ml-auto cursor-pointer'
+              onClick={() => navigate(`/rooms/${id}`)}>ルームへ進む</button>
+          </div>
+          {copied && <p className='text-[#7A6B57]'>コピーしました。</p>}
+        </div>
+      )}
       <div className='flex'>
         <div className='flex flex-col tracking-[0.2em] text-[#7A6B57]'>
           <span>発券後に</span>
           <span>URLが払い出されます。</span>
         </div>
         <button onClick={handleCreate}
+          disabled={id !== ''}
           className=' ml-auto border-2 w-16 h-16 text-red-700 rounded-full
         [writing-mode:vertical-rl] -rotate-12 font-bold cursor-pointer'>作成
         </button>
