@@ -3,6 +3,7 @@ package com.github.karuhito.orderroombackend.entity;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.Id;
+import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Column;
 
 import java.util.UUID;
@@ -39,6 +40,15 @@ public class Room {
     @Column(name = "memo")
     private String memo;
 
+    @Column(
+        name = "budget_amount",
+        check = @CheckConstraint(
+            name = "rooms_budget_amount_check",
+            constraint = "budget_amount >= 0"
+        )
+    )
+    private Integer budgetAmount;
+
     @Generated(event = EventType.INSERT)
     @Column(
         name = "host_key",
@@ -72,7 +82,7 @@ public class Room {
     }
 
 
-    // getter: id | title | eventDate | memo | hostKey | createdAt
+    // getter: id | title | eventDate | memo | budgetAmount | hostKey | createdAt
     public UUID getId() {
         return id;
     }
@@ -89,6 +99,10 @@ public class Room {
         return memo;
     }
 
+    public Integer getBudgetAmount() {
+        return budgetAmount;
+    }
+
     public UUID getHostKey() {
         return hostKey;
     }
@@ -97,8 +111,7 @@ public class Room {
         return createdAt;
     }
 
-    // setter: title | eventDate | memo
-
+    // setter: title | eventDate | memo | budgetAmount
     public void setTitle(String title) {
         this.title = title;
     }
@@ -109,5 +122,9 @@ public class Room {
 
     public void setMemo(String memo) {
         this.memo = memo;
+    }
+    
+    public void setBudgetAmount(Integer budgetAmount) {
+        this.budgetAmount = budgetAmount;
     }
 }

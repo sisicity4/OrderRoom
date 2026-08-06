@@ -9,6 +9,7 @@ public record CreateRoomResponse(
     String title,
     LocalDate eventDate,
     String memo,
+    Integer budgetAmount,
     UUID hostKey,
     String participantUrl,
     String hostUrl,
