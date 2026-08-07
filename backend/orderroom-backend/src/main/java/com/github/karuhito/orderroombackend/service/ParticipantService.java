@@ -4,12 +4,14 @@ import org.springframework.stereotype.Service;
 
 import com.github.karuhito.orderroombackend.dto.CreateParticipantRequest;
 import com.github.karuhito.orderroombackend.dto.CreateParticipantResponse;
+import com.github.karuhito.orderroombackend.dto.ParticipantListResponse;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -33,5 +35,11 @@ public class ParticipantService {
             savedParticipant.getToken(),
             savedParticipant.getCreatedAt()
         );
+    }
+
+    public List<ParticipantListResponse> getParticipants(UUID roomId) {
+        roomRepository.findById(roomId).orElseThrow(() ->  new RoomNotFoundException(roomId));
+        List<Participant> participants = participantRepository.findByRoomIdOrderByCreatedAtAsc(roomId);
+        return participants.stream().map(participant -> new ParticipantListResponse(participant.getId(), participant.getName(), participant.getCreatedAt())).toList();
     }
 }

@@ -267,17 +267,16 @@ stateDiagram-v2
 | participantId | 同じroomに存在しなければ404 |
 | hostKey / token | 不一致は403 |
 
-### 5.3 2026-08-05時点の実装差分
+### 5.3 2026-08-06時点の実装差分
 
 詳細は[実装照合レポート](実装照合レポート.md)と[動作リスク仕様](動作リスク仕様.md)を参照する。
 
 未実装または確定仕様との差分:
 
 - `GET /api/rooms/{roomId}`は未実装。Controller/Serviceに接続されたルーム情報取得APIは存在しない。
-- `GET /api/rooms/{roomId}/participants`は未実装。Controller/Serviceに参加者一覧取得APIは存在しない。
 - Roomの`budgetAmount`と予算差分は未実装。
 - `X-Participant-Token`による商品作成者の特定は未実装。
-- `GET /api/rooms/{roomId}/items`と`GET /api/rooms/{roomId}/summary`は、確定仕様では参加者またはホスト認証を想定しているが、現実装では認証ヘッダを検証していない。
+- `GET /api/rooms/{roomId}/items`、`GET /api/rooms/{roomId}/summary`、`GET /api/rooms/{roomId}/participants`は、確定仕様では参加者またはホスト認証を想定しているが、現実装では認証ヘッダを検証していない。
 - 商品編集・削除は未実装（Issue #34）。
 - 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
 - 現行実装のsummaryレスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、7.9の確定仕様とは互換性がない。
@@ -381,7 +380,7 @@ Request:
 { "name": "太郎" }
 ```
 
-Response 201。tokenはこの応答だけで返す。
+Response 201。tokenはこの応答だけで返す。参加者一覧の取得は7.10を参照する。
 
 ```json
 {
@@ -515,6 +514,26 @@ actualPriceは単価ではなく、この商品行全体の実支払額である
 - rejectedは件数以外の集計へ含めない
 - 予算未設定時、budgetAmount、remainingBudget、overBudgetAmountはnull
 - 超過時はremainingBudget=0、overBudgetAmountを正の値で返す
+
+### 7.10 GET `/api/rooms/{roomId}/participants`
+
+Response 200。参加登録順（createdAt昇順）の配列で返す。tokenは含めない。
+
+```json
+[
+  {
+    "id": "1a2b...",
+    "name": "太郎",
+    "createdAt": "2026-07-18T12:10:00Z"
+  }
+]
+```
+
+- 参加者が0人のルームは200で空配列を返す
+- 実在しないroomIdは404 `ROOM_NOT_FOUND`
+- roomIdがUUID形式でない場合は400 `TYPE_MISMATCH`
+- createdAtは精算の端数配分（8.2）で参加登録順を決めるためにも使う
+- 権限は6.1のとおり参加者またはホストだが、現実装は認証ヘッダを検証していない（5.3、Issue #101）
 
 ## 8. 精算計算
 

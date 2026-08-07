@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 
-public class ParticipantControllerTest {
+public class ParticipantControllerCreateTest {
     @Autowired
     private MockMvc mockMvc;
 
