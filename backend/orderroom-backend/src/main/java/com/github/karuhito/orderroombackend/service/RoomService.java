@@ -26,14 +26,15 @@ public class RoomService  {
       Room room = new Room(request.title());
       room.setEventDate(request.eventDate());
       room.setMemo(request.memo());
+      room.setBudgetAmount(request.budgetAmount());
 
       Room savedRoom = roomRepository.save(room);
 
      
-      // id,title,eventDate,memo,hostKey,participantUrl,hostUrl,createdAt
+      // id, title, eventDate, memo, budgetAmount, hostKey, participantUrl, hostUrl, createdAt
       String participantUrl = frontendBaseUrl + "/rooms/" + savedRoom.getId();
       String hostUrl = frontendBaseUrl + "/rooms/" + savedRoom.getId() + "/host?key=" + savedRoom.getHostKey();
-      CreateRoomResponse roomResponse = new CreateRoomResponse(savedRoom.getId(), savedRoom.getTitle(), savedRoom.getEventDate(), savedRoom.getMemo(), savedRoom.getHostKey(), participantUrl, hostUrl, savedRoom.getCreatedAt());
+      CreateRoomResponse roomResponse = new CreateRoomResponse(savedRoom.getId(), savedRoom.getTitle(), savedRoom.getEventDate(), savedRoom.getMemo(), savedRoom.getBudgetAmount(), savedRoom.getHostKey(), participantUrl, hostUrl, savedRoom.getCreatedAt());
 
       return roomResponse;
     }

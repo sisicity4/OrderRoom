@@ -2,6 +2,7 @@ package com.github.karuhito.orderroombackend.dto;
 
 import java.time.LocalDate;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -11,6 +12,9 @@ public record CreateRoomRequest(
     String title,
 
     LocalDate eventDate,
-    String memo
+    String memo,
+
+    @Min(value = 0, message = "予算上限をマイナスに設定することはできません")
+    Integer budgetAmount
 ) {
 }

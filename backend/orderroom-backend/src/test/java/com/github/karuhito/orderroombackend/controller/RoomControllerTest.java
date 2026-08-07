@@ -50,10 +50,10 @@ public class RoomControllerTest {
 
 
     // CreateRoom
-    @Test
+    @Test // 正常系
     void createRoomTest() throws Exception {
         // リクエストDTOを組み立てる
-        CreateRoomRequest request = new CreateRoomRequest("testTitle", null, null);
+        CreateRoomRequest request = new CreateRoomRequest("testTitle", null, null, null);
 
         // mockMvcでPOSTリクエストを送る
         mockMvc.perform(
@@ -64,13 +64,14 @@ public class RoomControllerTest {
         // 検証
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.title").value("testTitle"))
-        .andExpect(jsonPath("$.hostKey").exists());
+        .andExpect(jsonPath("$.hostKey").exists())
+        .andExpect(jsonPath("$.budgetAmount").isEmpty());
     }
 
-    @Test
+    @Test // 異常系: 入力値が不正
     void createRoomValidTest() throws Exception {
         // 全てnull
-        CreateRoomRequest request = new CreateRoomRequest(null, null, null);
+        CreateRoomRequest request = new CreateRoomRequest(null, null, null, null);
 
         mockMvc.perform(
             post("/api/rooms")
@@ -81,6 +82,51 @@ public class RoomControllerTest {
         .andExpect(jsonPath("$.error").value("VALID_ERROR"))
         .andExpect(jsonPath("$.message").value("不正な入力です"))
         .andExpect(jsonPath("$.fields.title").value("空白は許可されていません"));
+    }
+
+    @Test // 正常系 budgetAmountを指定できる
+    void createRoomWithBudgetAmountTest() throws Exception {
+        CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 12000);
+
+        mockMvc.perform(
+            post("/api/rooms")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.title").value("テストルーム"))
+        .andExpect(jsonPath("$.hostKey").exists())
+        .andExpect(jsonPath("$.budgetAmount").value(12000));
+    }
+
+    @Test // 正常系 budgetAmountが0のパターン
+    void createRoomZeroBudgetAmountTest() throws Exception {
+        CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 0);
+
+        mockMvc.perform(
+            post("/api/rooms")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.title").value("テストルーム"))
+        .andExpect(jsonPath("$.hostKey").exists())
+        .andExpect(jsonPath("$.budgetAmount").value(0));
+    }
+
+    @Test // 異常系: budgetAmountが負の数値
+    void createRoomInValidBudgetAmountTest() throws Exception {
+        CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, -1);
+
+        mockMvc.perform(
+            post("/api/rooms")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("VALID_ERROR"))
+        .andExpect(jsonPath("$.message").value("不正な入力です"))
+        .andExpect(jsonPath("$.fields.budgetAmount").value("予算上限をマイナスに設定することはできません"));
     }
 
     // アイテム集計のテスト
@@ -188,8 +234,5 @@ public class RoomControllerTest {
         .andExpect(jsonPath("$.totalPrice").value(0))
         .andExpect(jsonPath("$.participantSummaries").isEmpty())
         .andExpect(jsonPath("$.itemNameSummaries").isEmpty());
-
-
-
     }
 }
