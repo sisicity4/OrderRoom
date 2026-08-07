@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
         @ExceptionHandler(InvalidHostKeyException.class)
         public ResponseEntity<ErrorResponse> invalidHostKeyException(InvalidHostKeyException ex) {
             ErrorResponse response = new ErrorResponse("FORBIDDEN", "ホストキーが無効です", null);
-            log.warn("ルーム: {} で {} が起きています", ex.getMessage(), ex.getReason());
+            log.warn("ルーム: {} でホストキーの {} が起きています", ex.getMessage(), ex.getReason());
             return ResponseEntity.status(403).body(response);
         }
 
@@ -90,5 +90,12 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ErrorResponse> itemStatusInValidException(ItemStatusInvalidException ex) {
             ErrorResponse response  = new ErrorResponse("CONFLICT", "アイテムを採用済みにしている必要があります", null);
             return ResponseEntity.status(409).body(response);
+        }
+
+        @ExceptionHandler(InvalidTokenException.class)
+        public ResponseEntity<ErrorResponse> invalidTokenException(InvalidTokenException ex) {
+            ErrorResponse response = new ErrorResponse("FORBIDDEN", "トークンが無効です", null);
+            log.warn("ルーム: {} でトークンの {} が起きています", ex.getMessage(), ex.getReason());
+            return ResponseEntity.status(403).body(response);
         }
 }

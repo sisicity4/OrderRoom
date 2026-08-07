@@ -11,4 +11,5 @@ import com.github.karuhito.orderroombackend.entity.Participant;
 public interface ParticipantRepository  extends JpaRepository<Participant, UUID>{
     Optional<Participant> findByIdAndRoomId(UUID id, UUID roomId);
     List<Participant> findByRoomIdOrderByCreatedAtAsc(UUID roomId);
+    Optional<Participant> findByTokenAndRoomId(UUID token, UUID roomId);
 }
