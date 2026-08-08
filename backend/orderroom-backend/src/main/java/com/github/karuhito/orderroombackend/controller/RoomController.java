@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.github.karuhito.orderroombackend.dto.CreateRoomRequest;
 import com.github.karuhito.orderroombackend.dto.CreateRoomResponse;
 import com.github.karuhito.orderroombackend.dto.ItemSummaryResponse;
+import com.github.karuhito.orderroombackend.dto.RoomResponse;
 import com.github.karuhito.orderroombackend.service.ItemService;
 import com.github.karuhito.orderroombackend.service.RoomService;
 
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
+
 
 
 
@@ -45,6 +47,13 @@ public class RoomController {
         ItemSummaryResponse response = itemService.getItemSummary(roomId);
         return ResponseEntity.status(200).body(response);
     }
+
+    @GetMapping("/{roomId}")
+    public ResponseEntity<RoomResponse> getRoom(@PathVariable UUID roomId) {
+        RoomResponse response = roomService.getRoom(roomId);
+        return ResponseEntity.status(200).body(response);
+    }
+    
     
     
 }
