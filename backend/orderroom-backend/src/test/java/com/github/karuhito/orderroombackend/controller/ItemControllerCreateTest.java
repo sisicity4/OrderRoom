@@ -39,7 +39,7 @@ public class ItemControllerCreateTest {
     /**
     * CreateItemのテスト
     */
-    @Test // 正しい場合
+    @Test // 正常系
     void createItem() throws Exception {
         Room room = new Room("テストルーム");
         roomRepository.save(room);
@@ -48,10 +48,12 @@ public class ItemControllerCreateTest {
         Participant participant = new Participant(room, "テスト参加者");
         participantRepository.save(participant);
         UUID participantId = participant.getId();
+        UUID token = participant.getToken();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, 1, "テストメモ");
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -68,44 +70,67 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.updatedAt").exists());
     }
 
-    @Test // 1. roomIdが実在しない
-    void createItemNotFoundRoom() throws Exception {
-        UUID roomId = UUID.fromString("00000000-0000-0000-0000-000000000000");
-
-        UUID participantId = UUID.randomUUID();
-
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, 1, "テストメモ");
-        mockMvc.perform(
-            post("/api/rooms/{roomId}/items", roomId)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(request))
-        )
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"))
-        .andExpect(jsonPath("$.message").value("ルームが見つかりません"));
-    }
-
-    @Test // 2. roomIdは実在するがparticipantIdが実在しない
-    void createItemInValidParticipantId() throws Exception {
+    // 異常系
+    // 1. トークン検証(403)
+    @Test // 1-1 トークンが欠如している
+    void createItemMissingToken() throws Exception {
         Room room = new Room("テストルーム");
         roomRepository.save(room);
         UUID roomId = room.getId();
 
-        UUID participantId = UUID.randomUUID();
-
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, 1, "テストメモ");
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.error").value("PARTICIPANT_NOT_FOUND"))
-        .andExpect(jsonPath("$.message").value("参加者IDが正しくありません"));
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("トークンが無効です"));
     }
 
-    @Test // 3. participantIDが別のroomと紐づいている場合
-    void createItemNotFoundParticipantId() throws Exception {
+    @Test // 1-2 トークンの形式が不正(UUIDとして解釈できない)
+    void createItemInvalidFormatToken() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+
+        String token = "undefined";
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 1, "テストメモ");
+        mockMvc.perform(
+            post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("トークンが無効です"));
+    }
+
+    @Test // 1-3 どの参加者とも一致しないtoken
+    void createItemMismatchToken() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+
+        UUID token = UUID.randomUUID();
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 1, "テストメモ");
+        mockMvc.perform(
+            post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("トークンが無効です"));
+    }
+
+    @Test // 1-4 別ルームの参加者のtoken
+    void createItemOtherRoomToken() throws Exception {
         Room room1 = new Room("テストルーム1");
         roomRepository.save(room1);
 
@@ -116,27 +141,72 @@ public class ItemControllerCreateTest {
 
         Participant participant = new Participant(room1, "別ルームの参加者");
         participantRepository.save(participant);
-        UUID participantId = participant.getId();
+        UUID token = participant.getToken();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, 1, "テストメモ");
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.error").value("PARTICIPANT_NOT_FOUND"))
-        .andExpect(jsonPath("$.message").value("参加者IDが正しくありません"));
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("トークンが無効です"));
     }
 
-    @Test // 4.1 Itemのnameが空文字の場合
+    @Test // 1-5 roomIdが実在しない(tokenを照合できず403)
+    void createItemUnknownRoom() throws Exception {
+        UUID roomId = UUID.fromString("00000000-0000-0000-0000-000000000000");
+
+        UUID token = UUID.randomUUID();
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 1, "テストメモ");
+        mockMvc.perform(
+            post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("トークンが無効です"));
+    }
+
+    @Test // 1-6 幹事(hostKey保持者)であってもtokenが無ければ提案できない(設計書4.3)
+    void createItemHostKeyMissingToken() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        UUID hostKey = room.getHostKey();
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 1, "テストメモ");
+        mockMvc.perform(
+            post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("トークンが無効です"));
+    }
+
+    // 2. 入力バリデーション(400)
+    @Test // 2-1-1 Itemのnameが空文字の場合
     void createItemNotName() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        UUID participantId = UUID.randomUUID();
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "", 2000, 1, "テストメモ");
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID token = participant.getToken();
+
+        CreateItemRequest request = new CreateItemRequest("", 2000, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -146,14 +216,20 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.fields.name").value("アイテム名を正しく入力してください"));
     }
 
-    @Test // 4.2 Itemのnameがnullの場合
+    @Test // 2-1-2 Itemのnameがnullの場合
     void createItemNullName() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        UUID participantId = UUID.randomUUID();
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, null, 2000, 1, "テストメモ");
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID token = participant.getToken();
+
+        CreateItemRequest request = new CreateItemRequest(null, 2000, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -163,14 +239,20 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.fields.name").value("アイテム名を正しく入力してください"));
     }
 
-    @Test // 4.3 Itemのnameが最大文字数を超える場合
+    @Test // 2-1-3 Itemのnameが最大文字数を超える場合
     void createItemNameLengthInValidName() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        UUID participantId = UUID.randomUUID();
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "あ".repeat(101), 2000, 1, "テストメモ");
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID token = participant.getToken();
+
+        CreateItemRequest request = new CreateItemRequest("あ".repeat(101), 2000, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -180,14 +262,20 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.fields.name").value("アイテム名は100字以内で入力してください"));
     }
 
-    @Test // 5.1 Itemのpriceがマイナスの場合
+    @Test // 2-2-1 Itemのpriceがマイナスの場合
     void createItemInValidPrice() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        UUID participantId = UUID.randomUUID();
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", -2000, 1, "テストメモ");
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID token = participant.getToken();
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", -2000, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -197,14 +285,20 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.fields.price").value("値段をマイナスに設定することはできません"));
     }
 
-    @Test // 5.2 Itemのpriceがnullの場合
+    @Test // 2-2-2 Itemのpriceがnullの場合
     void createItemNullPrice() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        UUID participantId = UUID.randomUUID();
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", null, 1, "テストメモ");
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID token = participant.getToken();
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", null, 1, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -214,14 +308,20 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.fields.price").value("値段を正しく入力してください"));
     }
 
-    @Test // 6.1 Itemのquantityが0以下の場合
+    @Test // 2-3-1 Itemのquantityが0以下の場合
     void createItemInValidQuantity() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        UUID participantId = UUID.randomUUID();
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, 0, "テストメモ");
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID token = participant.getToken();
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, 0, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -231,14 +331,20 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.fields.quantity").value("個数を0以下に設定することはできません"));
     }
 
-    @Test // 6.2 Itemのquantityがnullの場合
+    @Test // 2-3-2 Itemのquantityがnullの場合
     void createItemNullQuantity() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        UUID participantId = UUID.randomUUID();
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
 
-        CreateItemRequest request = new CreateItemRequest(participantId, "テストアイテム", 2000, null, "テストメモ");
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID token = participant.getToken();
+
+        CreateItemRequest request = new CreateItemRequest("テストアイテム", 2000, null, "テストメモ");
         mockMvc.perform(
             post("/api/rooms/{roomId}/items", roomId)
+            .header("X-Participant-Token", token.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
@@ -247,4 +353,5 @@ public class ItemControllerCreateTest {
         .andExpect(jsonPath("$.message").value("不正な入力です"))
         .andExpect(jsonPath("$.fields.quantity").value("個数を正しく入力してください"));
     }
+
 }
