@@ -38,38 +38,35 @@ function CreatePage() {
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
       <h3 className='tracking-[1.6em] text-[#7A6B57]'>開店</h3>
       <p className='tracking-[0.5em] text-[#7A6B57]'>るーむさくせい</p>
-      <h1 className='text-5xl font-bold'>ルーム作成</h1>
-
+      <h1 className='text-[clamp(2rem,8vw,3rem)] font-bold'>ルーム作成</h1>
       <div className='flex'>
-        <p className='border px-2' >日 付</p>
+        <p className='border px-2 shrink-0' >日 付</p>
 
         <input
-          className='border-b-2 border-neutral-700 ml-1.5 outline-none'
+          className='border-b-2 border-neutral-700 ml-1.5 outline-none min-w-0'
           type="date"
           value={eventDate}
           onChange={(e) =>
             setEventDate(e.target.value)
           } />
-
-
-
       </div>
 
       <hr className='border-t-5' />
 
       <div className='flex'>
-        <p className='border px-2'>ルーム名</p>
+        <p className='border px-2 shrink-0 '>ルーム名</p>
         <input
-          className='border-b-2 ml-1.5 border-neutral-700 outline-none'
+          className='border-b-2 ml-1.5 border-neutral-700 outline-none w-full min-w-0'
           placeholder='ルーム名を入力'
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-
-        <p className='border px-2 ml-70'>予算</p>
+      </div>
+      <div className='flex'>
+        <p className='border px-2 shrink-0'>予算</p>
         <input
-          className='border-b-2 border-neutral-700 outline-none ml-1.5'
+          className='border-b-2 border-neutral-700 outline-none ml-1.5 w-full min-w-0'
           placeholder='予算を入力'
           type="text"
           value={budgetAmount}
@@ -119,7 +116,7 @@ function CreatePage() {
         </div>
         <button onClick={handleCreate}
           disabled={id !== ''}
-          className=' ml-auto border-2 w-16 h-16 text-red-700 rounded-full
+          className=' ml-auto shrink-0 border-2 w-16 h-16 text-red-700 rounded-full
         [writing-mode:vertical-rl] -rotate-12 font-bold cursor-pointer'>作成
         </button>
       </div>
