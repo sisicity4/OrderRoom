@@ -107,7 +107,7 @@ public class ParticipantControllerCreateTest {
         .andExpect(jsonPath("$.fields.name").value("名前を正しく入力してください"));
     }
 
-    @Test // 3.2 Participantのnameが空文字の場合
+    @Test // 3.2 Participantのnameがnullの場合
     void createParticipantNullParticipantName() throws Exception {
         Room room = new Room("テストルーム");
         roomRepository.save(room);

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -235,4 +236,59 @@ public class RoomControllerTest {
         .andExpect(jsonPath("$.participantSummaries").isEmpty())
         .andExpect(jsonPath("$.itemNameSummaries").isEmpty());
     }
+
+    // getRoomテスト
+    @Test // 正常系1 hostKeyがResponseに含まれていないことを確認する
+    void getRoom() throws Exception {
+        Room room = new Room("テストルーム");
+        room.setBudgetAmount(20000);
+        room.setMemo("テストメモ");
+        room.setEventDate(LocalDate.of(2000, 1, 1));
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+
+        mockMvc.perform(
+            get("/api/rooms/{roomId}", roomId.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(room.getId().toString()))
+        .andExpect(jsonPath("$.title").value("テストルーム"))
+        .andExpect(jsonPath("$.eventDate").value("2000-01-01"))
+        .andExpect(jsonPath("$.memo").value("テストメモ"))
+        .andExpect(jsonPath("$.budgetAmount").value(20000))
+        .andExpect(jsonPath("$.createdAt").exists())
+        .andExpect(jsonPath("$.hostKey").doesNotExist());
+    }
+    
+    @Test // 正常系2 budgetAmountが未設定の場合でも200で通る
+    void getRoomNullBudgetAmount() throws Exception {
+        Room room = new Room("テストルーム");
+        room.setMemo("テストメモ");
+        room.setEventDate(LocalDate.of(2000, 1, 1));
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+
+        mockMvc.perform(
+            get("/api/rooms/{roomId}", roomId.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.budgetAmount").isEmpty());
+    }
+
+
+    @Test // 異常系1 roomIdが存在しない
+    void getRoomNotFoundRoom() throws Exception {
+        UUID roomId = UUID.randomUUID();
+
+        mockMvc.perform(
+            get("/api/rooms/{roomId}", roomId.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+        )
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"))
+        .andExpect(jsonPath("$.message").value("ルームが見つかりません"));
+    }
+    
 }
