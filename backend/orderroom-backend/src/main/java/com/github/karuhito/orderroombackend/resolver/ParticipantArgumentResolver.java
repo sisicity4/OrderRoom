@@ -6,7 +6,6 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
-import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.RequestAttributes;
@@ -15,12 +14,8 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import org.springframework.web.servlet.HandlerMapping;
 
 import com.github.karuhito.orderroombackend.entity.Participant;
-import com.github.karuhito.orderroombackend.entity.Room;
-import com.github.karuhito.orderroombackend.exception.InvalidHostKeyException;
-import com.github.karuhito.orderroombackend.exception.InvalidHostKeyReason;
 import com.github.karuhito.orderroombackend.exception.InvalidTokenException;
 import com.github.karuhito.orderroombackend.exception.InvalidTokenReason;
-import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 
 
@@ -40,8 +35,6 @@ public class ParticipantArgumentResolver implements HandlerMethodArgumentResolve
 
     @Override
     public @Nullable Object resolveArgument(MethodParameter parameter, @Nullable ModelAndViewContainer mavContainer, NativeWebRequest webRequest, @Nullable WebDataBinderFactory binderFactory) throws Exception {
-        
-        
         Object attribute = webRequest.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
         if (attribute instanceof Map) {
             // Spring MVCがこの属性に必ずMap<String, String>を格納するため安全
