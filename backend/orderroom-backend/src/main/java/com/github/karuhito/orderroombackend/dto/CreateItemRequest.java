@@ -1,16 +1,11 @@
 package com.github.karuhito.orderroombackend.dto;
 
-import java.util.UUID;
-
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateItemRequest(
-    @NotNull(message = "参加者を正しく指定してください")
-    UUID participantId,
-
     @NotBlank(message = "アイテム名を正しく入力してください")
     @Size(max = 100, message = "アイテム名は100字以内で入力してください")
     String name,

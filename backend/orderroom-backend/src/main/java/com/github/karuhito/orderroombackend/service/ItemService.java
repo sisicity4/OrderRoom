@@ -17,17 +17,18 @@ import com.github.karuhito.orderroombackend.dto.ParticipantSummary;
 import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
+
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
+
 import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
 import com.github.karuhito.orderroombackend.exception.ItemStatusInvalidException;
 import com.github.karuhito.orderroombackend.exception.NotItemOwnerException;
-import com.github.karuhito.orderroombackend.exception.ParticipantNotFoundException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
+
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
-import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
 import com.github.karuhito.orderroombackend.resolver.Operator;
 
@@ -37,17 +38,14 @@ import com.github.karuhito.orderroombackend.resolver.Operator;
 public class ItemService {
     private final ItemRepository itemRepository;
     private final RoomRepository roomRepository;
-    private final ParticipantRepository participantRepository;
 
-    public ItemService(ItemRepository itemRepository, RoomRepository roomRepository,ParticipantRepository participantRepository ) {
+    public ItemService(ItemRepository itemRepository, RoomRepository roomRepository) {
         this.itemRepository = itemRepository;
         this.roomRepository = roomRepository;
-        this.participantRepository = participantRepository;
     }
 
-    public CreateItemResponse createItem(UUID roomId, CreateItemRequest request) {
-        Room room = roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
-        Participant participant = participantRepository.findByIdAndRoomId(request.participantId(), roomId).orElseThrow(() -> new ParticipantNotFoundException(request.participantId()));
+    public CreateItemResponse createItem(Participant participant, CreateItemRequest request) {
+        Room room = participant.getRoom();
         Item item = new Item(room, participant, request.name(), request.price(), request.quantity(), request.memo());
         Item savedItem = itemRepository.save(item);
         return new CreateItemResponse(

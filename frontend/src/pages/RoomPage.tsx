@@ -21,17 +21,19 @@ function RoomPage() {
     <div className='bg-[#f0e5cc] min-h-screen flex flex-col gap-4 p-8'>
       <p className='tracking-[0.5em] text-[#7A6B57]'>おしながき</p>
       <p className='tracking-[1.0em] text-[#7A6B57]'>ルーム名</p>
-      <h1 className='text-4xl font-bold'>ルーム名</h1>
+      <h1 className='text-[clamp(1.75rem,7vw,2.5rem)] font-bold'>ルーム名</h1>
       <div className='flex'>
-        <p className='border w-fit px-2 '>ID.</p>
+        <p className='border w-fit px-2 shrink-0'>ID.</p>
         <input
-          className='border-b-2 border-neutral-700 ml-1.5 outline-none'
+          className='border-b-2 border-neutral-700 ml-1.5 outline-none w-full min-w-0'
           type="text"
         />
+      </div>
 
-        <p className='border px-2 w-fit ml-auto'>予算</p>
+      <div className='flex'>
+        <p className='border px-2 w-fit shrink-0'>予算</p>
         <input
-          className='border-b-2 border-neutral-700 ml-1.5 outline-none'
+          className='border-b-2 border-neutral-700 ml-1.5 outline-none w-full min-w-0'
           type="text" />
       </div>
 
@@ -41,9 +43,9 @@ function RoomPage() {
 
 
       <div className='flex'>
-        <p className='border w-fit px-2'>提案</p>
-        <p className='border ml-auto px-2'>合計</p>
-        <p className='border-b ml-2 mr-35 tracking-[0.2em]'>{total}円</p>
+        <p className='border w-fit px-2 shrink-0'>提案</p>
+        <p className='border ml-auto px-2 shrink-0'>合計</p>
+        <p className='border-b ml-2 tracking-[0.2em] shrink-0'>{total}円</p>
       </div>
       <ul>
         {list.map((item, index) => (
@@ -54,7 +56,7 @@ function RoomPage() {
               setMemoText(item.memo);
             }}>{item.text + " "}{item.price + "円 "}{item.quantity + "個"}
             <button
-              className='border px-2 ml-auto cursor-pointer'
+              className='border px-2 ml-auto shrink-0 cursor-pointer'
               onClick={(e) => {
                 e.stopPropagation();
                 setList(list.filter((_item, i) => i !== index));
@@ -66,23 +68,23 @@ function RoomPage() {
       </ul>
 
 
-      <div className='flex '>
+      <div className='flex flex-col gap-2 sm:flex-row'>
         <input
-          className='border outline-none border-dashed'
+          className='border outline-none border-dashed px-2 min-w-0'
           type='text'
           value={name}
           placeholder='注文を追加'
           onChange={(e) => setName(e.target.value)} />
 
         <input
-          className='border outline-none border-dashed'
+          className='border outline-none border-dashed px-2 min-w-0'
           type='text'
           value={price}
           placeholder='値段を追加'
           onChange={(e) => setPrice(e.target.value)} />
 
         <input
-          className='border outline-none border-dashed'
+          className='border outline-none border-dashed px-2 min-w-0'
           type='text'
           value={quantity}
           placeholder='個数を追加'

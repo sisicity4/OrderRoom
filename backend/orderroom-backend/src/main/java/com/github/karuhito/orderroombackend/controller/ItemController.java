@@ -17,7 +17,9 @@ import com.github.karuhito.orderroombackend.dto.ItemListResponse;
 import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemRequest;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
+import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.resolver.CurrentOperator;
+import com.github.karuhito.orderroombackend.resolver.CurrentParticipant;
 import com.github.karuhito.orderroombackend.resolver.Operator;
 import com.github.karuhito.orderroombackend.service.ItemService;
 
@@ -40,8 +42,8 @@ public class ItemController {
     }
     
     @PostMapping // アイテム作成
-    public ResponseEntity<CreateItemResponse> createItem(@PathVariable UUID roomId, @Valid @RequestBody CreateItemRequest request) {
-        CreateItemResponse response = itemService.createItem(roomId, request);
+    public ResponseEntity<CreateItemResponse> createItem(@CurrentParticipant Participant participant, @Valid @RequestBody CreateItemRequest request) {
+        CreateItemResponse response = itemService.createItem(participant, request);
 
         return ResponseEntity.status(201).body(response);
     }
