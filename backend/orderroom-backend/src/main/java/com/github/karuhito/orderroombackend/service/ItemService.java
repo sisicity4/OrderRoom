@@ -15,6 +15,7 @@ import com.github.karuhito.orderroombackend.dto.ItemNameSummary;
 import com.github.karuhito.orderroombackend.dto.ItemSummaryResponse;
 import com.github.karuhito.orderroombackend.dto.ParticipantSummary;
 import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
+import com.github.karuhito.orderroombackend.dto.UpdateItemRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
 
 import com.github.karuhito.orderroombackend.entity.Room;
@@ -24,10 +25,12 @@ import com.github.karuhito.orderroombackend.entity.Participant;
 
 import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
 import com.github.karuhito.orderroombackend.exception.ItemStatusInvalidException;
+import com.github.karuhito.orderroombackend.exception.NotItemOwnerException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
+import com.github.karuhito.orderroombackend.resolver.Operator;
 
 
 @Service
@@ -140,4 +143,54 @@ public class ItemService {
 
         return new ItemSummaryResponse(totalPrice, participantSummaries, itemNameSummaries);
     }
+
+    public ItemListResponse updateItem(UUID roomId, UUID itemId, Operator operator, UpdateItemRequest request) {
+        Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
+        
+        checkOperatorCanModify(item, operator);
+        item.setName(request.name());
+        item.setPrice(request.price());
+        item.setQuantity(request.quantity());
+        item.setMemo(request.memo());
+        // 参加者による編集かつ status == ACCEPTEDの場合 status = PROPOSED , purchased = false に切り替える
+        if (!operator.isHost() && item.getStatus() == ItemStatus.ACCEPTED) {
+            item.setStatus(ItemStatus.PROPOSED);
+            item.setPurchased(false);
+        }
+
+        Item updatedItem = itemRepository.save(item);
+        return new ItemListResponse(
+            updatedItem.getId(),
+            updatedItem.getRoom().getId(),
+            updatedItem.getParticipant().getId(),
+            updatedItem.getParticipant().getName(), 
+            updatedItem.getName(),
+            updatedItem.getPrice(),
+            updatedItem.getQuantity(),
+            updatedItem.getMemo(),
+            updatedItem.getStatus(),
+            updatedItem.isPurchased(),
+            updatedItem.getCreatedAt(),
+            updatedItem.getUpdatedAt()
+        );
+    }
+    
+    public void deleteItem(UUID roomId, UUID itemId, Operator operator) {
+        Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
+        checkOperatorCanModify(item, operator);
+        itemRepository.delete(item);
+    }
+
+    /**
+     * 権限チェック(Roomのホスト or アイテム提案者の確認)
+     * @param item アイテムオブジェクト
+     * @param operator アイテム管理者
+     */
+    private void checkOperatorCanModify(Item item, Operator operator) {
+        if (!operator.isHost() && !operator.participantId().equals(item.getParticipant().getId())) {
+            throw new NotItemOwnerException(operator.participantId(), item.getId());
+        }
+    }
+
+
 }

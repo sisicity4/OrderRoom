@@ -19,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.JacksonException.Reference;
 import tools.jackson.databind.exc.InvalidFormatException;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -55,9 +57,9 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(InvalidHostKeyException.class)
-        public ResponseEntity<ErrorResponse> invalidHostKeyException(InvalidHostKeyException ex) {
+        public ResponseEntity<ErrorResponse> invalidHostKeyException(InvalidHostKeyException ex, HttpServletRequest request) {
             ErrorResponse response = new ErrorResponse("FORBIDDEN", "ホストキーが無効です", null);
-            log.warn("ルーム: {} でホストキーの {} が起きています", ex.getMessage(), ex.getReason());
+            log.warn("[{} {}] ルーム: {} でホストキーの {} が起きています", request.getMethod(), request.getRequestURI(), ex.getMessage(), ex.getReason());
             return ResponseEntity.status(403).body(response);
         }
 
@@ -93,9 +95,23 @@ public class GlobalExceptionHandler {
         }
 
         @ExceptionHandler(InvalidTokenException.class)
-        public ResponseEntity<ErrorResponse> invalidTokenException(InvalidTokenException ex) {
+        public ResponseEntity<ErrorResponse> invalidTokenException(InvalidTokenException ex, HttpServletRequest request) {
             ErrorResponse response = new ErrorResponse("FORBIDDEN", "トークンが無効です", null);
-            log.warn("ルーム: {} でトークンの {} が起きています", ex.getMessage(), ex.getReason());
+            log.warn("[{} {}] ルーム: {} でトークンの {} が起きています", request.getMethod(), request.getRequestURI(), ex.getMessage(), ex.getReason());
+            return ResponseEntity.status(403).body(response);
+        }
+
+        @ExceptionHandler(UnauthenticatedException.class)
+        public ResponseEntity<ErrorResponse> unauthenticatedException(UnauthenticatedException ex, HttpServletRequest request) {
+            ErrorResponse response = new ErrorResponse("FORBIDDEN", "認証情報がありません", null);
+            log.warn("[{} {}] ルーム: {} でX-Host-KeyヘッダとX-Participant-Tokenヘッダがありません", request.getMethod(), request.getRequestURI(), ex.getMessage());
+            return ResponseEntity.status(403).body(response);
+        }
+
+        @ExceptionHandler(NotItemOwnerException.class)
+        public ResponseEntity<ErrorResponse> notItemOwnerException(NotItemOwnerException ex, HttpServletRequest request) {
+            ErrorResponse response = new ErrorResponse("FORBIDDEN", "アイテムを操作する権限がありません", null);
+            log.warn("[{} {}] 参加者: {} はアイテム: {} を操作する権限がありません", request.getMethod(), request.getRequestURI(), ex.getMessage(), ex.getItemId());
             return ResponseEntity.status(403).body(response);
         }
 }
