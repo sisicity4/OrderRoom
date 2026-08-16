@@ -86,8 +86,8 @@ public class GlobalExceptionHandler {
         
         @ExceptionHandler(ItemStatusInvalidException.class)
         public ResponseEntity<ErrorResponse> itemStatusInValidException(ItemStatusInvalidException ex) {
-            ErrorResponse response  = new ErrorResponse("CONFLICT", "アイテムを採用済みにしている必要があります", null);
-            return ResponseEntity.status(409).body(response);
+            ErrorResponse response  = new ErrorResponse("INVALID_ITEM_STATE", "アイテムを採用済みにしている必要があります", null);
+            return ResponseEntity.status(400).body(response);
         }
 
         @ExceptionHandler(InvalidTokenException.class)

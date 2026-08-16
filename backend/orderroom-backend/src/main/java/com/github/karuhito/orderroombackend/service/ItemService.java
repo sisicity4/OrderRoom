@@ -103,8 +103,8 @@ public class ItemService {
         Item item = itemRepository.findByIdAndRoomId(itemId, roomId)
                 .orElseThrow(() -> new ItemNotFoundException(itemId));
 
-        // StatusがACCEPTED以外のときはItemStatusInvalidExceptionをthrow
-        if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
+        // StatusがACCEPTED以外かつPurchasedをTrueにしようとしている時はItemStatusInvalidExceptionをthrow
+        if (!item.getStatus().equals(ItemStatus.ACCEPTED) && request.purchased()) {
             throw new ItemStatusInvalidException(itemId, item.getStatus());
         }
         item.setPurchased(request.purchased());

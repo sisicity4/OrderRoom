@@ -123,6 +123,31 @@ public class ItemControllerUpdatePurchasedTest {
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.updatedAt").exists());
     }
+    // 正常系1.3 Proposedのアイテムに false -> false を送った場合
+    @Test
+    void updatePurchasedProposedItemTofalse() throws Exception{
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        UUID hostKey = room.getHostKey();
+        Participant participant = new Participant(room, "テスト参加者");            participantRepository.save(participant);
+    
+        Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
+        item.setStatus(ItemStatus.PROPOSED);
+        itemRepository.save(item);
+        UUID itemId = item.getId();
+
+        UpdateItemPurchasedRequest request = new UpdateItemPurchasedRequest(false);
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchased", roomId, itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(itemId.toString()))
+        .andExpect(jsonPath("$.purchased").value(false));
+    }
 
     // 異常系
     // 異常系1.StatusがACCEPTEDではない場合
@@ -137,11 +162,12 @@ public class ItemControllerUpdatePurchasedTest {
         participantRepository.save(participant);
     
         Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
-        item.setPurchased(false);
+        item.setStatus(ItemStatus.PROPOSED);
+        item.setPurchased(true);
         itemRepository.save(item);
         UUID itemId = item.getId();
 
-        UpdateItemPurchasedRequest request = new UpdateItemPurchasedRequest(false);
+        UpdateItemPurchasedRequest request = new UpdateItemPurchasedRequest(true);
 
         mockMvc.perform(
             patch("/api/rooms/{roomId}/items/{itemId}/purchased", roomId, itemId)
@@ -149,8 +175,8 @@ public class ItemControllerUpdatePurchasedTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request))
         )
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.error").value("CONFLICT"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("INVALID_ITEM_STATE"))
         .andExpect(jsonPath("$.message").value("アイテムを採用済みにしている必要があります"));
     }
 
