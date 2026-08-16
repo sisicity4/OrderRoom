@@ -18,6 +18,7 @@ import com.github.karuhito.orderroombackend.exception.InvalidTokenException;
 import com.github.karuhito.orderroombackend.exception.InvalidTokenReason;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 
+import com.github.karuhito.orderroombackend.util.RoomIdParser;
 
 @Component
 public class ParticipantArgumentResolver implements HandlerMethodArgumentResolver{
@@ -41,7 +42,7 @@ public class ParticipantArgumentResolver implements HandlerMethodArgumentResolve
             @SuppressWarnings("unchecked") Map<String,String> map = (Map<String, String>) attribute;
             
             // パス変数の Map から roomId を取得
-            UUID roomId = UUID.fromString(map.get("roomId"));
+            UUID roomId = RoomIdParser.roomIdParse(map.get("roomId"));
 
             // "X-Participant-Token"を取得 -> null なら MISSING で例外
             String header = webRequest.getHeader("X-Participant-Token");

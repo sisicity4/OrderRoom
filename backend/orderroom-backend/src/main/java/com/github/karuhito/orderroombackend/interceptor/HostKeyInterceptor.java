@@ -13,6 +13,8 @@ import com.github.karuhito.orderroombackend.exception.InvalidHostKeyReason;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
 
+import com.github.karuhito.orderroombackend.util.RoomIdParser;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -32,7 +34,7 @@ public class HostKeyInterceptor implements HandlerInterceptor {
             if (attribute instanceof Map) {
                 // Spring MVCがこの属性に必ずMap<String, String>を格納するため安全
                 @SuppressWarnings("unchecked") Map<String,String> map = (Map<String, String>) attribute;  
-                UUID roomId = UUID.fromString(map.get("roomId"));
+                UUID roomId = RoomIdParser.roomIdParse(map.get("roomId"));
                 if (header == null) {
                     throw new InvalidHostKeyException(roomId, InvalidHostKeyReason.MISSING);
                 }

@@ -27,6 +27,8 @@ import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.exception.UnauthenticatedException;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 
+import com.github.karuhito.orderroombackend.util.RoomIdParser;
+
 @Component
 public class OperatorArgumentResolver implements HandlerMethodArgumentResolver {
     private final RoomRepository roomRepository;
@@ -52,7 +54,7 @@ public class OperatorArgumentResolver implements HandlerMethodArgumentResolver {
             @SuppressWarnings("unchecked")
             Map<String, String> map = (Map<String, String>) attribute;
 
-            UUID roomId = UUID.fromString(map.get("roomId"));
+            UUID roomId = RoomIdParser.roomIdParse(map.get("roomId"));
 
             // X-Host-Key ヘッダを読み込む
             String hostKeyString = webRequest.getHeader("X-Host-Key");
