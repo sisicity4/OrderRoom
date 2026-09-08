@@ -94,9 +94,18 @@ DB_PASSWORD=<パスワード>
 
 ### 2. 起動
 
+Neonを使う通常起動:
+
 ```bash
 cd backend/orderroom-backend
 ./mvnw spring-boot:run
+```
+
+DB接続情報なしでローカル確認する場合は、H2のインメモリDBを使います:
+
+```bash
+cd backend/orderroom-backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 `Tomcat started on port 8080` と表示されれば起動成功です。
