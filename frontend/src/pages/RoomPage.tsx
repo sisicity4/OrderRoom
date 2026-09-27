@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom';
 type Proposal = {
-  text: string;
-  quantity: number;
+  id: string;
+  participantName: string;
+  name: string;
   price: number;
+  quantity: number;
   memo: string;
+  status: string;
+  purchased: boolean;
 };
 function RoomPage() {
   const [name, setName] = useState('');
@@ -15,6 +20,39 @@ function RoomPage() {
   const [memoText, setMemoText] = useState('')
 
   const total = list.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const { roomId } = useParams<{ roomId: string }>();
+  const navigate = useNavigate();
+  const stored = localStorage.getItem(`participant:${roomId}`);
+  const token: string | null = stored ? JSON.parse(stored).token : null;
+
+  const fetchItems = async () => {
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/items`);
+      if (!res.ok) {
+        setError("提案の取得に失敗しました。");
+        return;
+      }
+      const data = await res.json();
+      setList(data);
+    } catch {
+      setError("通信に失敗しました。");
+    }
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, [roomId]);
+
+  if (!token) {
+    return (
+      <div className='bg-[#f0e5cc] min-h-screen flex flex-col gap-4 p-8'>
+        <p>このルームにまだ参加していません。</p>
+        <button className='border px-4 py-2 w-fit' onClick={() => navigate('/join')}>
+          参加画面へ
+        </button>
+      </div>
+    );
+  }
 
 
   return (
@@ -24,10 +62,9 @@ function RoomPage() {
       <h1 className='text-[clamp(1.75rem,7vw,2.5rem)] font-bold'>ルーム名</h1>
       <div className='flex'>
         <p className='border w-fit px-2 shrink-0'>ID.</p>
-        <input
+        <p
           className='border-b-2 border-neutral-700 ml-1.5 outline-none w-full min-w-0'
-          type="text"
-        />
+        >{roomId}</p>
       </div>
 
       <div className='flex'>
@@ -50,11 +87,11 @@ function RoomPage() {
       <ul>
         {list.map((item, index) => (
           <li className='border border-dashed p-3 flex'
-            key={index}
+            key={item.id}
             onClick={() => {
               setSelected(index);
               setMemoText(item.memo);
-            }}>{item.text + " "}{item.price + "円 "}{item.quantity + "個"}
+            }}>{item.name + " "}{item.price + "円 "}{item.quantity + "個"}
             <button
               className='border px-2 ml-auto shrink-0 cursor-pointer'
               onClick={(e) => {
@@ -94,7 +131,7 @@ function RoomPage() {
 
       {error && <p className='text-red-700'>{error}</p>}
 
-      <button onClick={() => {
+      <button onClick={async () => {
         if (name === '' || price === '' || quantity === '') {
           setError("入力欄をすべて入れてください。");
           return;
@@ -103,11 +140,32 @@ function RoomPage() {
           setError("値段と個数は数字で入れてください。");
           return;
         }
-        setList([...list, { text: name, price: Number(price), quantity: Number(quantity), memo: '' }]);
-        setName('');
-        setPrice('');
-        setQuantity('');
-        setError('');
+        try {
+          const res = await fetch(`/api/rooms/${roomId}/items`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Participant-Token': token,
+            },
+            body: JSON.stringify({
+              name,
+              price: Number(price),
+              quantity: Number(quantity),
+              memo: '',
+            }),
+          });
+          if (!res.ok) {
+            setError("提案の追加に失敗しました。");
+            return;
+          }
+          await fetchItems();
+          setName('');
+          setPrice('');
+          setQuantity('');
+          setError('');
+        } catch {
+          setError("通信に失敗しました。");
+        }
       }}>提案の追加</button>
 
       {selected !== null && (
@@ -116,7 +174,7 @@ function RoomPage() {
           <div className='bg-[#f0e5cc] w-full rounded-t-2xl p-6 flex flex-col gap-3'
             onClick={(e) => e.stopPropagation()}>
             <p className='border w-fit px-2'>メモ</p>
-            <h2 className='text-xl font-bold'>{list[selected].text}</h2>
+            <h2 className='text-xl font-bold'>{list[selected].name}</h2>
             <textarea
               className='border border-dashed outline-none p-2 h-32'
               value={memoText}
