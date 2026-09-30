@@ -1,5 +1,6 @@
 package com.github.karuhito.orderroombackend.service;
 
+import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +28,7 @@ import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
 import com.github.karuhito.orderroombackend.exception.ItemStatusInvalidException;
 import com.github.karuhito.orderroombackend.exception.NotItemOwnerException;
+import com.github.karuhito.orderroombackend.exception.ParticipantNotFoundException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
@@ -36,12 +38,14 @@ import com.github.karuhito.orderroombackend.resolver.Operator;
 @Service
 
 public class ItemService {
+    private final ParticipantRepository participantRepository;
     private final ItemRepository itemRepository;
     private final RoomRepository roomRepository;
 
-    public ItemService(ItemRepository itemRepository, RoomRepository roomRepository) {
+    public ItemService(ItemRepository itemRepository, RoomRepository roomRepository, ParticipantRepository participantRepository) {
         this.itemRepository = itemRepository;
         this.roomRepository = roomRepository;
+        this.participantRepository = participantRepository;
     }
 
     public CreateItemResponse createItem(Participant participant, CreateItemRequest request) {
@@ -64,6 +68,9 @@ public class ItemService {
 
     public List<ItemListResponse> getItems(UUID roomId, ItemStatus status, UUID participantId) {
         roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
+        if (participantId != null) {
+            participantRepository.findByIdAndRoomId(participantId, roomId).orElseThrow(() -> new ParticipantNotFoundException(participantId));
+        }
         List<Item> items = itemRepository.findItemsByRoomAndFilters(roomId, status, participantId);
         return items.stream()
                 .map(item -> new ItemListResponse(item.getId(), item.getRoom().getId(), item.getParticipant().getId(),
