@@ -116,6 +116,13 @@ public class GlobalExceptionHandler {
             return createTypeMismatchResponse(ex.getFieldName(), ex.getInvalidValue());
         }
 
+        @ExceptionHandler(Exception.class)
+        public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception ex, HttpServletRequest request) {
+            log.error("[{} {}] 想定外のエラーが発生しました", request.getMethod(), request.getRequestURI(), ex);
+            ErrorResponse response = new ErrorResponse("INTERNAL_ERROR", "サーバーエラーが発生しました", null);
+            return ResponseEntity.status(500).body(response);
+        }
+
         private ResponseEntity<ErrorResponse> createTypeMismatchResponse(String fieldName, String invalidValue) {
             Map<String, String> fieldsMap = Map.of(fieldName, "不正な値: " + invalidValue);
             ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
