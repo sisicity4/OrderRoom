@@ -253,7 +253,7 @@ stateDiagram-v2
 | 404 | `PARTICIPANT_NOT_FOUND` | 実装済み | 参加者不存在、または別ルームの参加者 |
 | 404 | `ITEM_NOT_FOUND` | 実装済み | 商品不存在 |
 | 409 | `CONFLICT` | 未実装 | 精算済みなど、現在状態と操作の競合 |
-| 500 | `INTERNAL_ERROR` | 未実装 | 想定外のサーバー内部エラー(DB切断など) |
+| 500 | `INTERNAL_ERROR` | 実装済み | 想定外のサーバー内部エラー(DB切断など) |
 
 ### 5.2 バリデーション
 
