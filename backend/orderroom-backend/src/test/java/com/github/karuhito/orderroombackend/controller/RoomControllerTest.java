@@ -124,6 +124,7 @@ public class RoomControllerTest {
 
         @Test  // 正常系 roomのtitleの長さが最大の場合
         void createRoomValidTitleTest() throws Exception {
+
                 String title = "A".repeat(100);
                 CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000);
 
@@ -132,14 +133,15 @@ public class RoomControllerTest {
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(objectMapper.writeValueAsString(request)))
                         .andExpect(status().isCreated())
-                        .andExpect(jsonPath("$.title").value("テストルーム"))
+                        .andExpect(jsonPath("$.title").value(title))
                         .andExpect(jsonPath("$.hostKey").exists())
                         .andExpect(jsonPath("$.title").value(title));
         }
 
         @Test // 異常系: roomのtitleの長さが101文字の場合
         void createRoomInvalidTitleTest() throws Exception {
-                CreateRoomRequest request = new CreateRoomRequest("A".repeat(101), null, null, 1000);
+                String title = "A".repeat(101);
+                CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000);
 
                 mockMvc.perform(
                                 post("/api/rooms")
