@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 
 public record CreateRoomRequest(
     @NotBlank(message = "空白は許可されていません")
-    @Size(max = 100)
+    @Size(max = 100, message = "タイトルの長さは100文字までです")
     String title,
 
     LocalDate eventDate,
