@@ -246,7 +246,7 @@ stateDiagram-v2
 | HTTP | `error` | 状態 | 用途 |
 | --- | --- | --- | --- |
 | 400 | `VALID_ERROR` | 実装済み | Bean Validation失敗 |
-| 400 | `INVALID_ITEM_STATE` | 未実装 | accepted以外の商品をpurchased=trueにしようとした |
+| 400 | `INVALID_ITEM_STATE` | 実装済み | accepted以外の商品をpurchased=trueにしようとした |
 | 400 | `TYPE_MISMATCH` | 実装済み | roomIdなどの型不正 |
 | 403 | `FORBIDDEN` | 実装済み | token、hostKey、操作権限の不一致 |
 | 404 | `ROOM_NOT_FOUND` | 実装済み | ルーム不存在 |
@@ -281,7 +281,6 @@ stateDiagram-v2
 - 商品編集・削除は未実装（Issue #34）。
 - 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
 - 現行実装のsummaryレスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、7.9の確定仕様とは互換性がない。
-- accepted以外の商品に対する`PATCH /api/rooms/{roomId}/items/{itemId}/purchased`は、確定仕様では`purchased=true`を400 `INVALID_ITEM_STATE`で拒否するが、現実装では`purchased`の値に関わらず409 `CONFLICT`を返す。
 - 実購入額、購入者、精算対象者、立替精算案、精算済み記録は未実装。
 - FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
 - 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
