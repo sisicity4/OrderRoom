@@ -43,11 +43,7 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(MethodArgumentTypeMismatchException.class)
         public ResponseEntity<ErrorResponse> handleTypeMismatchException(MethodArgumentTypeMismatchException ex) {
-            Map<String, String> fieldsMap = new HashMap<>();
-            fieldsMap.put(ex.getName(), "不正な値: " + ex.getValue());
-
-            ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
-            return ResponseEntity.status(400).body(response);
+            return createTypeMismatchResponse(ex.getName(), ex.getValue().toString());
         }
 
         @ExceptionHandler(ParticipantNotFoundException.class)
@@ -90,8 +86,8 @@ public class GlobalExceptionHandler {
         
         @ExceptionHandler(ItemStatusInvalidException.class)
         public ResponseEntity<ErrorResponse> itemStatusInValidException(ItemStatusInvalidException ex) {
-            ErrorResponse response  = new ErrorResponse("CONFLICT", "アイテムを採用済みにしている必要があります", null);
-            return ResponseEntity.status(409).body(response);
+            ErrorResponse response  = new ErrorResponse("INVALID_ITEM_STATE", "アイテムを採用済みにしている必要があります", null);
+            return ResponseEntity.status(400).body(response);
         }
 
         @ExceptionHandler(InvalidTokenException.class)
@@ -113,5 +109,23 @@ public class GlobalExceptionHandler {
             ErrorResponse response = new ErrorResponse("FORBIDDEN", "アイテムを操作する権限がありません", null);
             log.warn("[{} {}] 参加者: {} はアイテム: {} を操作する権限がありません", request.getMethod(), request.getRequestURI(), ex.getMessage(), ex.getItemId());
             return ResponseEntity.status(403).body(response);
+        }
+
+        @ExceptionHandler(InvalidPathVariableException.class)
+        public ResponseEntity<ErrorResponse> invalidPathVariableException(InvalidPathVariableException ex) {
+            return createTypeMismatchResponse(ex.getFieldName(), ex.getInvalidValue());
+        }
+
+        @ExceptionHandler(Exception.class)
+        public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception ex, HttpServletRequest request) {
+            log.error("[{} {}] 想定外のエラーが発生しました", request.getMethod(), request.getRequestURI(), ex);
+            ErrorResponse response = new ErrorResponse("INTERNAL_ERROR", "サーバーエラーが発生しました", null);
+            return ResponseEntity.status(500).body(response);
+        }
+
+        private ResponseEntity<ErrorResponse> createTypeMismatchResponse(String fieldName, String invalidValue) {
+            Map<String, String> fieldsMap = Map.of(fieldName, "不正な値: " + invalidValue);
+            ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
+            return ResponseEntity.status(400).body(response);
         }
 }

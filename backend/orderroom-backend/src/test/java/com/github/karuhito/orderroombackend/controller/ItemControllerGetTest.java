@@ -120,7 +120,31 @@ public class ItemControllerGetTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2))
         .andExpect(jsonPath("$[0].status").value("accepted"));
-        
+    }
+
+    @Test // 参加者を2人作成、2人ともアイテムを作成し、片方の参加者IDで絞り込みができる
+    void getItemsFilteredByValidParticipantId() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+
+        Participant participant1 = new Participant(room, "参加者1");
+        participantRepository.save(participant1);
+        Participant participant2 = new Participant(room, "参加者2");
+        participantRepository.save(participant2);
+
+        Item item1 = new Item(room, participant1, "コーラ", 200, 1, null);
+        itemRepository.save(item1);
+        Item item2 = new Item(room, participant2, "ポテチ", 150, 2, null);
+        itemRepository.save(item2);
+
+        mockMvc.perform(
+            get("/api/rooms/{roomId}/items", roomId)
+            .param("participantId", participant1.getId().toString())
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].participantId").value(participant1.getId().toString()));
     }
     
     // 異常系
@@ -219,7 +243,32 @@ public class ItemControllerGetTest {
             get("/api/rooms/{roomId}/items", roomId)
             .param("participantId", fakeParticipantId.toString())
         )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$").isEmpty());
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("PARTICIPANT_NOT_FOUND"))
+        .andExpect(jsonPath("$.message").value("参加者IDが正しくありません"));
+    }
+
+
+    @Test // 5. 別ルームのparticipantId
+    void getItemsOtherRoomParticipant() throws Exception {
+        Room room1 = new Room("テストルーム1");
+        roomRepository.save(room1);
+        
+
+        Room room2 = new Room("テストルーム2");
+        roomRepository.save(room2);
+        UUID roomId = room2.getId();
+
+        Participant participant = new Participant(room1, "ルーム1参加者");
+        participantRepository.save(participant);
+        UUID participantId = participant.getId();
+
+        mockMvc.perform(
+            get("/api/rooms/{roomId}/items", roomId)
+            .param("participantId", participantId.toString())
+        )
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("PARTICIPANT_NOT_FOUND"))
+        .andExpect(jsonPath("$.message").value("参加者IDが正しくありません"));
     }
 }
