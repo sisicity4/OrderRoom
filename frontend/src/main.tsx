@@ -2,20 +2,22 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import {BrowserRouter, Routes, Route }from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import CreatePage from './pages/CreatePage'
 import JoinPage from './pages/JoinPage'
 import RoomPage from './pages/RoomPage'
+import HostPage from './pages/HostPage'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-    <Routes>
-      <Route path="/" element={<App />} />
-      <Route path="/create" element={<CreatePage />} />
-      <Route path="/join" element={<JoinPage />} />
-      <Route path="/rooms/:roomId" element={<RoomPage />} />
-    </Routes>
+      <Routes>
+        <Route path="/" element={<App />} />
+        <Route path="/create" element={<CreatePage />} />
+        <Route path="/join" element={<JoinPage />} />
+        <Route path="/rooms/:roomId" element={<RoomPage />} />
+        <Route path="/rooms/:roomId/host" element={<HostPage />} />
+      </Routes>
     </BrowserRouter>
   </StrictMode>,
 )
