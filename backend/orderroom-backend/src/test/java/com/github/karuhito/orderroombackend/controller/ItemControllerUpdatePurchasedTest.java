@@ -1,6 +1,7 @@
 package com.github.karuhito.orderroombackend.controller;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,6 +21,7 @@ import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
+import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
@@ -125,12 +127,13 @@ public class ItemControllerUpdatePurchasedTest {
     }
     // 正常系1.3 Proposedのアイテムに false -> false を送った場合
     @Test
-    void updatePurchasedProposedItemTofalse() throws Exception{
+    void updatePurchasedProposedItemToFalse() throws Exception{
         Room room = new Room("テストルーム");
         roomRepository.save(room);
         UUID roomId = room.getId();
         UUID hostKey = room.getHostKey();
-        Participant participant = new Participant(room, "テスト参加者");            participantRepository.save(participant);
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
     
         Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
         item.setStatus(ItemStatus.PROPOSED);
@@ -147,6 +150,42 @@ public class ItemControllerUpdatePurchasedTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(itemId.toString()))
         .andExpect(jsonPath("$.purchased").value(false));
+    }
+    
+    @Test // 正常系1.4 purchasedをtrue -> falseにした時、actualPriceとpaidByParticipantがnullになっているか
+    void updateItemPurchaseDetailClearTest() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        UUID hostKey = room.getHostKey();
+
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        
+    
+        Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
+        item.setStatus(ItemStatus.ACCEPTED);
+        item.setPurchased(true);
+        item.setActualPrice(200);
+        item.setPaidByParticipant(participant);
+        itemRepository.save(item);
+        UUID itemId = item.getId();
+
+        UpdateItemPurchasedRequest request = new UpdateItemPurchasedRequest(false);
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchased", roomId, itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(itemId.toString()))
+        .andExpect(jsonPath("$.purchased").value(false));
+
+        Item checkItem = itemRepository.findById(itemId).orElseThrow(() -> new ItemNotFoundException(itemId));
+        assertNull(checkItem.getPaidByParticipant());
+        assertNull(checkItem.getActualPrice());
     }
 
     // 異常系
@@ -326,4 +365,6 @@ public class ItemControllerUpdatePurchasedTest {
         .andExpect(jsonPath("$.message").value("パラメータの型が不正です"))
         .andExpect(jsonPath("$.fields.purchased").value("不正なpurchasedです"));
     }
+
+
 }

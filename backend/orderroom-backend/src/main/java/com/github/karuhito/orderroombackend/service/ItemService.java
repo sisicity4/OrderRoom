@@ -90,6 +90,7 @@ public class ItemService {
         // statusがACCEPTED以外になる場合、Purchasedをfalseにする
         if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
             item.setPurchased(false);
+            itemPurchaseDetailClear(item);
         }
 
         Item updatedItem = itemRepository.save(item);
@@ -116,6 +117,10 @@ public class ItemService {
         // StatusがACCEPTED以外かつPurchasedをTrueにしようとしている時はItemStatusInvalidExceptionをthrow
         if (!item.getStatus().equals(ItemStatus.ACCEPTED) && request.purchased()) {
             throw new ItemStatusInvalidException(itemId, item.getStatus());
+        }
+        // 購入済みから未購入にしたい場合は購入詳細をnullに置き換えクリアする
+        if (!request.purchased()) {
+            itemPurchaseDetailClear(item);
         }
         item.setPurchased(request.purchased());
 
@@ -234,10 +239,11 @@ public class ItemService {
         item.setPrice(request.price());
         item.setQuantity(request.quantity());
         item.setMemo(request.memo());
-        // 参加者による編集かつ status == ACCEPTEDの場合 status = PROPOSED , purchased = false に切り替える
+        // ホストでない参加者による編集かつ status == ACCEPTEDの場合 status = PROPOSED , purchased = false に切り替える
         if (!operator.isHost() && item.getStatus() == ItemStatus.ACCEPTED) {
             item.setStatus(ItemStatus.PROPOSED);
             item.setPurchased(false);
+            itemPurchaseDetailClear(item);
         }
 
         Item updatedItem = itemRepository.save(item);
@@ -283,8 +289,7 @@ public class ItemService {
         if (reason == null) {
             // クリア
             if (request.actualPrice() == null) { 
-                item.setActualPrice(null);
-                item.setPaidByParticipant(null);
+                itemPurchaseDetailClear(item);
                 itemRepository.save(item);
             // 値あり
             } else {
@@ -333,5 +338,14 @@ public class ItemService {
             return InvalidPurchaseDetailStateReason.NOT_PURCHASED;
         }
         return null;
+    }
+
+    /**
+     * アイテムの購入詳細フィールドをクリアするメソッド
+     * @param item クリアするアイテム
+     */
+    private void itemPurchaseDetailClear(Item item) {
+        item.setActualPrice(null);
+        item.setPaidByParticipant(null);
     }
 }
