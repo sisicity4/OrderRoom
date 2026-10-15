@@ -566,4 +566,158 @@ public class ItemControllerUpdatePurchaseDetailTest {
         .andExpect(jsonPath("$.message").value("不正な入力です"))
         .andExpect(jsonPath("$.fields.actualPrice").value("実購入額をマイナスに設定することはできません"));
     }
+
+    @Test // 存在確認1: 存在しないitemIdの場合
+    void updatePurchaseDetailItemNotFound() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        UUID hostKey = room.getHostKey();
+
+        Participant paidByParticipant = new Participant(room, "テストユーザー1");
+        participantRepository.save(paidByParticipant);
+        UUID paidByParticipantId = paidByParticipant.getId();
+
+        // 実在しないitemId
+        UUID itemId = UUID.randomUUID();
+
+        UpdateItemPurchaseDetailRequest request = new UpdateItemPurchaseDetailRequest(300, paidByParticipantId);
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchase-detail", roomId, itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("ITEM_NOT_FOUND"))
+        .andExpect(jsonPath("$.message").value("アイテムが見つかりません"));
+    }
+
+    @Test // 存在確認2: 別ルームのitemIdの場合
+    void updatePurchaseDetailItemOfAnotherRoom() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        UUID hostKey = room.getHostKey();
+
+        Participant paidByParticipant = new Participant(room, "テストユーザー1");
+        participantRepository.save(paidByParticipant);
+        UUID paidByParticipantId = paidByParticipant.getId();
+
+        // 別ルームと、そのルームのアイテムを作成
+        Room anotherRoom = new Room("別ルーム");
+        roomRepository.save(anotherRoom);
+        Participant anotherParticipant = new Participant(anotherRoom, "別ルーム参加者");
+        participantRepository.save(anotherParticipant);
+
+        Item item = new Item(anotherRoom, anotherParticipant, "コーラ", 150, 1, null);
+        item.setStatus(ItemStatus.ACCEPTED);
+        item.setPurchased(true);
+        itemRepository.save(item);
+        UUID itemId = item.getId();
+
+        UpdateItemPurchaseDetailRequest request = new UpdateItemPurchaseDetailRequest(300, paidByParticipantId);
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchase-detail", roomId, itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("ITEM_NOT_FOUND"))
+        .andExpect(jsonPath("$.message").value("アイテムが見つかりません"));
+    }
+
+    @Test // 認証1: X-Host-Keyが不一致の場合
+    void updatePurchaseDetailMismatchHostKey() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+
+        // room.getHostKey()とは異なるホストキー
+        UUID hostKey = UUID.randomUUID();
+
+        Participant participant = new Participant(room, "テストユーザー1");
+        participantRepository.save(participant);
+
+        Participant paidByParticipant = new Participant(room, "テストユーザー2");
+        participantRepository.save(paidByParticipant);
+        UUID paidByParticipantId = paidByParticipant.getId();
+
+        Item item = new Item(room, participant, "コーラ", 150, 1, null);
+        item.setStatus(ItemStatus.ACCEPTED);
+        item.setPurchased(true);
+        itemRepository.save(item);
+        UUID itemId = item.getId();
+
+        UpdateItemPurchaseDetailRequest request = new UpdateItemPurchaseDetailRequest(300, paidByParticipantId);
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchase-detail", roomId, itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("ホストキーが無効です"));
+    }
+
+    @Test // 認証2: 別ルームのX-Host-Keyを送る場合
+    void updatePurchaseDetailAnotherRoomHostKey() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+
+        // 別ルームのホストキー
+        Room anotherRoom = new Room("別ルーム");
+        roomRepository.save(anotherRoom);
+        UUID anotherHostKey = anotherRoom.getHostKey();
+
+        Participant participant = new Participant(room, "テストユーザー1");
+        participantRepository.save(participant);
+
+        Participant paidByParticipant = new Participant(room, "テストユーザー2");
+        participantRepository.save(paidByParticipant);
+        UUID paidByParticipantId = paidByParticipant.getId();
+
+        Item item = new Item(room, participant, "コーラ", 150, 1, null);
+        item.setStatus(ItemStatus.ACCEPTED);
+        item.setPurchased(true);
+        itemRepository.save(item);
+        UUID itemId = item.getId();
+
+        UpdateItemPurchaseDetailRequest request = new UpdateItemPurchaseDetailRequest(300, paidByParticipantId);
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchase-detail", roomId, itemId)
+            .header("X-Host-Key", anotherHostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+        .andExpect(jsonPath("$.message").value("ホストキーが無効です"));
+    }
+
+    @Test // 型: roomIdがUUIDではない場合
+    void updatePurchaseDetailInvalidRoomId() throws Exception {
+        UUID itemId = UUID.randomUUID();
+        UUID hostKey = UUID.randomUUID();
+
+        UpdateItemPurchaseDetailRequest request = new UpdateItemPurchaseDetailRequest(300, UUID.randomUUID());
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchase-detail", "not-a-uuid", itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("TYPE_MISMATCH"))
+        .andExpect(jsonPath("$.message").value("パラメータの型が不正です"))
+        .andExpect(jsonPath("$.fields.roomId").value("不正な値: not-a-uuid"));
+    }
 }

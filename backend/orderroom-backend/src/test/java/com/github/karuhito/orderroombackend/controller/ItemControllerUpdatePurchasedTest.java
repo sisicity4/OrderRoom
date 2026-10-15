@@ -1,6 +1,7 @@
 package com.github.karuhito.orderroombackend.controller;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -186,6 +187,42 @@ public class ItemControllerUpdatePurchasedTest {
         Item checkItem = itemRepository.findById(itemId).orElseThrow(() -> new ItemNotFoundException(itemId));
         assertNull(checkItem.getPaidByParticipant());
         assertNull(checkItem.getActualPrice());
+    }
+
+    @Test // 正常系1.5 purchasedをtrueにした時、actualPriceとpaidByParticipantが消えないか
+    void updatePurchasedToTrueKeepsPurchaseDetail() throws Exception {
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
+        UUID hostKey = room.getHostKey();
+
+        Participant participant = new Participant(room, "テスト参加者");
+        participantRepository.save(participant);
+        UUID participantId = participant.getId();
+
+        Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
+        item.setStatus(ItemStatus.ACCEPTED);
+        item.setPurchased(true);
+        item.setActualPrice(200);
+        item.setPaidByParticipant(participant);
+        itemRepository.save(item);
+        UUID itemId = item.getId();
+
+        UpdateItemPurchasedRequest request = new UpdateItemPurchasedRequest(true);
+
+        mockMvc.perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/purchased", roomId, itemId)
+            .header("X-Host-Key", hostKey.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request))
+        )
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(itemId.toString()))
+        .andExpect(jsonPath("$.purchased").value(true));
+
+        Item checkItem = itemRepository.findById(itemId).orElseThrow(() -> new ItemNotFoundException(itemId));
+        assertEquals(200, checkItem.getActualPrice());
+        assertEquals(participantId, checkItem.getPaidByParticipant().getId());
     }
 
     // 異常系
