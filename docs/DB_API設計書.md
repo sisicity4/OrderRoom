@@ -246,7 +246,7 @@ stateDiagram-v2
 | HTTP | `error` | 状態 | 用途 |
 | --- | --- | --- | --- |
 | 400 | `VALID_ERROR` | 実装済み | Bean Validation失敗 |
-| 400 | `INVALID_ITEM_STATE` | 実装済み | accepted以外の商品をpurchased=trueにしようとした |
+| 400 | `INVALID_ITEM_STATE` | 実装済み | accepted以外の商品をpurchased=trueにしようとした。または、accepted かつ purchased=true でない商品に、購入詳細（実購入額・購入者）を登録しようとした |
 | 400 | `TYPE_MISMATCH` | 実装済み | roomIdなどの型不正 |
 | 403 | `FORBIDDEN` | 実装済み | token、hostKey、操作権限の不一致 |
 | 404 | `ROOM_NOT_FOUND` | 実装済み | ルーム不存在 |
@@ -281,7 +281,7 @@ stateDiagram-v2
 - 商品編集・削除は未実装（Issue #34）。
 - 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
 - 現行実装のsummaryレスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、7.9の確定仕様とは互換性がない。
-- 実購入額、購入者、精算対象者、立替精算案、精算済み記録は未実装。
+- 精算対象者、立替精算案、精算済み記録は未実装。
 - FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
 - 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
 
@@ -477,6 +477,54 @@ Header: `X-Host-Key`
 ```
 
 actualPriceは単価ではなく、この商品行全体の実支払額である。
+
+- `actualPrice`は0以上の整数、`paidByParticipantId`は同じルームの参加者IDとする
+- `actualPrice`と`paidByParticipantId`は両方入力するか、両方nullにするかのどちらかとする
+- 両方nullのリクエストは、購入詳細のクリアとして扱う
+- 値を登録できるのは、accepted かつ purchased=true の商品だけとする
+- クリアは商品の状態にかかわらず200を返す。状態が合わない商品では何も変更しない
+
+チェックは次の順に行う。
+
+| 順 | 内容 | 失敗時 |
+| --- | --- | --- |
+| 1 | ホストキー | 403 `FORBIDDEN` |
+| 2 | 入力形式（片方だけの入力、`actualPrice`が負の値） | 400 `VALID_ERROR`。`fields`に原因の項目を入れる |
+| 3 | 商品の存在（別ルームの商品を含む） | 404 `ITEM_NOT_FOUND` |
+| 4 | 商品の状態（値ありのときだけ） | 400 `INVALID_ITEM_STATE` |
+| 5 | 購入者の存在（別ルームの参加者を含む） | 404 `PARTICIPANT_NOT_FOUND` |
+
+`INVALID_ITEM_STATE`は、商品の状態によってメッセージを出し分ける。
+
+| 状態 | メッセージ |
+| --- | --- |
+| accepted以外 | アイテムを採用済みにしている必要があります |
+| acceptedだがpurchased=false | アイテムを購入済みにしている必要があります |
+
+片方だけの入力は、足りない項目を`fields`に入れる。
+
+| 入力 | `fields`のキー | メッセージ |
+| --- | --- | --- |
+| `actualPrice`だけ | `paidByParticipantId` | 実購入額を入力した場合は購入者も選択してください |
+| `paidByParticipantId`だけ | `actualPrice` | 購入者を選択した場合は実購入額も入力してください |
+| `actualPrice`が負の値 | `actualPrice` | 実購入額をマイナスに設定することはできません |
+
+レスポンスは、更新後の購入詳細を返す。クリアしたときと、状態が合わずに何も変更しなかったときは、`actualPrice`、`paidByParticipantId`、`paidByParticipantName`をnullで返す。
+
+```json
+{
+  "id": "9c0c2395-...",
+  "name": "コーラ",
+  "actualPrice": 720,
+  "paidByParticipantId": "1a2b...",
+  "paidByParticipantName": "田中"
+}
+```
+
+現行実装差分:
+
+- 商品一覧（7.5）のレスポンスには、`actualPrice`と購入者は含まれない。登録済みの購入詳細は、このAPIのレスポンスでだけ確認できる。
+- 精算済みの場合に409で拒否する処理は、未実装である（5.1の`CONFLICT`と同じ扱い）。
 
 ### 7.9 GET `/api/rooms/{roomId}/summary`
 現行実装差分: 2026-08-03時点の実装レスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、accepted/proposed別集計、予算差分、byStatus、acceptedItemCount、estimatedTotalPriceは未実装。

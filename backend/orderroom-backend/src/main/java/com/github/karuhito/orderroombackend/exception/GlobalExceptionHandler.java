@@ -128,4 +128,14 @@ public class GlobalExceptionHandler {
             ErrorResponse response = new ErrorResponse("TYPE_MISMATCH", "パラメータの型が不正です", fieldsMap);
             return ResponseEntity.status(400).body(response);
         }
+
+        @ExceptionHandler(InvalidPurchaseDetailStateException.class)
+        public ResponseEntity<ErrorResponse> invalidPurchaseDetailStateException(InvalidPurchaseDetailStateException ex) {
+            String message = switch (ex.getReason()) {
+                case NOT_ACCEPTED -> "アイテムを採用済みにしている必要があります";
+                case NOT_PURCHASED -> "アイテムを購入済みにしている必要があります";
+            };
+            ErrorResponse response = new ErrorResponse("INVALID_ITEM_STATE", message, null);
+            return ResponseEntity.status(400).body(response);
+        }
 }

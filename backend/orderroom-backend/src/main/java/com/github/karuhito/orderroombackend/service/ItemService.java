@@ -14,8 +14,10 @@ import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateItemResponse;
 import com.github.karuhito.orderroombackend.dto.ItemListResponse;
 import com.github.karuhito.orderroombackend.dto.ItemNameSummary;
+import com.github.karuhito.orderroombackend.dto.ItemPurchaseDetailResponse;
 import com.github.karuhito.orderroombackend.dto.ItemSummaryResponse;
 import com.github.karuhito.orderroombackend.dto.ParticipantSummary;
+import com.github.karuhito.orderroombackend.dto.UpdateItemPurchaseDetailRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
@@ -24,7 +26,8 @@ import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
-
+import com.github.karuhito.orderroombackend.exception.InvalidPurchaseDetailStateException;
+import com.github.karuhito.orderroombackend.exception.InvalidPurchaseDetailStateReason;
 import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
 import com.github.karuhito.orderroombackend.exception.ItemStatusInvalidException;
 import com.github.karuhito.orderroombackend.exception.NotItemOwnerException;
@@ -87,6 +90,7 @@ public class ItemService {
         // statusがACCEPTED以外になる場合、Purchasedをfalseにする
         if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
             item.setPurchased(false);
+            itemPurchaseDetailClear(item);
         }
 
         Item updatedItem = itemRepository.save(item);
@@ -113,6 +117,10 @@ public class ItemService {
         // StatusがACCEPTED以外かつPurchasedをTrueにしようとしている時はItemStatusInvalidExceptionをthrow
         if (!item.getStatus().equals(ItemStatus.ACCEPTED) && request.purchased()) {
             throw new ItemStatusInvalidException(itemId, item.getStatus());
+        }
+        // 購入済みから未購入にしたい場合は購入詳細をnullに置き換えクリアする
+        if (!request.purchased()) {
+            itemPurchaseDetailClear(item);
         }
         item.setPurchased(request.purchased());
 
@@ -231,10 +239,11 @@ public class ItemService {
         item.setPrice(request.price());
         item.setQuantity(request.quantity());
         item.setMemo(request.memo());
-        // 参加者による編集かつ status == ACCEPTEDの場合 status = PROPOSED , purchased = false に切り替える
+        // ホストでない参加者による編集かつ status == ACCEPTEDの場合 status = PROPOSED , purchased = false に切り替える
         if (!operator.isHost() && item.getStatus() == ItemStatus.ACCEPTED) {
             item.setStatus(ItemStatus.PROPOSED);
             item.setPurchased(false);
+            itemPurchaseDetailClear(item);
         }
 
         Item updatedItem = itemRepository.save(item);
@@ -271,5 +280,72 @@ public class ItemService {
         }
     }
 
+    public ItemPurchaseDetailResponse updateItemPurchaseDetail(UUID roomId, UUID itemId, UpdateItemPurchaseDetailRequest request) {
+        // 商品を取得
+        Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
+        // 状態を判定する
+        InvalidPurchaseDetailStateReason reason = itemDetailCheck(item);
+        // 原因なし
+        if (reason == null) {
+            // クリア
+            if (request.actualPrice() == null) { 
+                itemPurchaseDetailClear(item);
+                itemRepository.save(item);
+            // 値あり
+            } else {
+                Participant newPaidByParticipant = participantRepository.findByIdAndRoomId(request.paidByParticipantId(), roomId).orElseThrow(() -> new ParticipantNotFoundException(request.paidByParticipantId()));
+                item.setActualPrice(request.actualPrice());
+                item.setPaidByParticipant(newPaidByParticipant);
+                itemRepository.save(item);
+            }
+        // 原因あり
+        } else {
+            if (request.actualPrice() != null) {
+                throw new InvalidPurchaseDetailStateException(itemId, reason);
+            }
+        }
 
+        // 購入者をitemから取り出す
+        Participant paidParticipant = item.getPaidByParticipant();
+        UUID paidParticipantId = null;
+        String paidParticipantName = null;
+        Integer actualPrice = null;
+        // 購入者が存在する場合、 値を代入する
+        if (paidParticipant != null) {
+            actualPrice = item.getActualPrice();
+            paidParticipantId = paidParticipant.getId();
+            paidParticipantName = paidParticipant.getName();
+        }
+        return new ItemPurchaseDetailResponse(
+            item.getId(),
+            item.getName(),
+            actualPrice,
+            paidParticipantId,
+            paidParticipantName
+        );
+    }
+
+    /**
+     * updateItemPurchaseDetailでアイテムの状態を判定するメソッド
+     * @param item 判定するアイテムのオブジェクト
+     * @return StatusがAcceptedでない場合はNOT_ACCEPTED, Purchasedがfalseの場合はNOT_PURCHASED、ACCEPTEDかつPurchased=trueの場合はnullを返す
+     */
+    private InvalidPurchaseDetailStateReason itemDetailCheck(Item item) {
+        if (item.getStatus() != ItemStatus.ACCEPTED) {
+            return InvalidPurchaseDetailStateReason.NOT_ACCEPTED;
+        }
+        if (!item.isPurchased()) {
+            return InvalidPurchaseDetailStateReason.NOT_PURCHASED;
+        }
+        return null;
+    }
+
+    /**
+     * アイテムの購入詳細フィールドをクリアするメソッド
+     * @param item クリアするアイテム
+     */
+    private void itemPurchaseDetailClear(Item item) {
+        item.setActualPrice(null);
+        item.setPaidByParticipant(null);
+    }
 }
