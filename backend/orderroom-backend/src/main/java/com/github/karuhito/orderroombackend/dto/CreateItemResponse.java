@@ -1,9 +1,8 @@
 package com.github.karuhito.orderroombackend.dto;
 
+import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import java.time.Instant;
 import java.util.UUID;
-
-import com.github.karuhito.orderroombackend.entity.ItemStatus;
 
 public record CreateItemResponse(
     UUID id,
@@ -16,6 +15,4 @@ public record CreateItemResponse(
     ItemStatus status,
     boolean purchased,
     Instant createdAt,
-    Instant updatedAt
-) {
-}
+    Instant updatedAt) {}

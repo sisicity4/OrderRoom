@@ -10,6 +10,4 @@ public record RoomResponse(
     LocalDate eventDate,
     String memo,
     Integer budgetAmount,
-    Instant createdAt
-) {
-}
+    Instant createdAt) {}

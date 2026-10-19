@@ -1,21 +1,9 @@
 package com.github.karuhito.orderroombackend.controller;
 
-import org.junit.jupiter.api.Test;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.time.LocalDate;
-import java.util.UUID;
-
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.github.karuhito.orderroombackend.dto.CreateRoomRequest;
 import com.github.karuhito.orderroombackend.entity.Item;
@@ -25,169 +13,165 @@ import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
-
+import java.time.LocalDate;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
-
 
 @SpringBootTest
 @AutoConfigureMockMvc
-
 public class RoomControllerTest {
-    @Autowired
-    private MockMvc mockMvc;
+  @Autowired private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+  @Autowired private ObjectMapper objectMapper;
 
-    @Autowired
-    private RoomRepository roomRepository;
+  @Autowired private RoomRepository roomRepository;
 
-    @Autowired
-    private ParticipantRepository participantRepository;
+  @Autowired private ParticipantRepository participantRepository;
 
-    @Autowired
-    private ItemRepository itemRepository;
-    
+  @Autowired private ItemRepository itemRepository;
 
+  // CreateRoom
+  @Test // 正常系
+  void createRoomTest() throws Exception {
+    // リクエストDTOを組み立てる
+    CreateRoomRequest request = new CreateRoomRequest("testTitle", null, null, null);
 
-    // CreateRoom
-    @Test // 正常系
-    void createRoomTest() throws Exception {
-        // リクエストDTOを組み立てる
-        CreateRoomRequest request = new CreateRoomRequest("testTitle", null, null, null);
-
-        // mockMvcでPOSTリクエストを送る
-        mockMvc.perform(
+    // mockMvcでPOSTリクエストを送る
+    mockMvc
+        .perform(
             post("/api/rooms")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-        )
+                .content(objectMapper.writeValueAsString(request)))
         // 検証
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.title").value("testTitle"))
         .andExpect(jsonPath("$.hostKey").exists())
         .andExpect(jsonPath("$.budgetAmount").isEmpty());
-    }
+  }
 
-    @Test // 異常系: 入力値が不正
-    void createRoomValidTest() throws Exception {
-        // 全てnull
-        CreateRoomRequest request = new CreateRoomRequest(null, null, null, null);
+  @Test // 異常系: 入力値が不正
+  void createRoomValidTest() throws Exception {
+    // 全てnull
+    CreateRoomRequest request = new CreateRoomRequest(null, null, null, null);
 
-        mockMvc.perform(
+    mockMvc
+        .perform(
             post("/api/rooms")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-        )
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("VALID_ERROR"))
         .andExpect(jsonPath("$.message").value("不正な入力です"))
         .andExpect(jsonPath("$.fields.title").value("空白は許可されていません"));
-    }
+  }
 
-    @Test // 正常系 budgetAmountを指定できる
-    void createRoomWithBudgetAmountTest() throws Exception {
-        CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 12000);
+  @Test // 正常系 budgetAmountを指定できる
+  void createRoomWithBudgetAmountTest() throws Exception {
+    CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 12000);
 
-        mockMvc.perform(
+    mockMvc
+        .perform(
             post("/api/rooms")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-        )
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.title").value("テストルーム"))
         .andExpect(jsonPath("$.hostKey").exists())
         .andExpect(jsonPath("$.budgetAmount").value(12000));
-    }
+  }
 
-    @Test // 正常系 budgetAmountが0のパターン
-    void createRoomZeroBudgetAmountTest() throws Exception {
-        CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 0);
+  @Test // 正常系 budgetAmountが0のパターン
+  void createRoomZeroBudgetAmountTest() throws Exception {
+    CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 0);
 
-        mockMvc.perform(
+    mockMvc
+        .perform(
             post("/api/rooms")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-        )
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.title").value("テストルーム"))
         .andExpect(jsonPath("$.hostKey").exists())
         .andExpect(jsonPath("$.budgetAmount").value(0));
-    }
+  }
 
-    @Test // 異常系: budgetAmountが負の数値
-    void createRoomInValidBudgetAmountTest() throws Exception {
-        CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, -1);
+  @Test // 異常系: budgetAmountが負の数値
+  void createRoomInValidBudgetAmountTest() throws Exception {
+    CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, -1);
 
-        mockMvc.perform(
+    mockMvc
+        .perform(
             post("/api/rooms")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-        )
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("VALID_ERROR"))
         .andExpect(jsonPath("$.message").value("不正な入力です"))
         .andExpect(jsonPath("$.fields.budgetAmount").value("予算上限をマイナスに設定することはできません"));
-    }
+  }
 
-    // アイテム集計のテスト
-    @Test
-    void getItemSummary() throws Exception {
-        // ルーム作成
-        Room room = new Room("テストルーム");
-        roomRepository.save(room);
-        UUID roomId = room.getId();
-        
-        // 参加者を3人作成
-        Participant participant1 = new Participant(room, "テストユーザー1");
-        participantRepository.save(participant1);
+  // アイテム集計のテスト
+  @Test
+  void getItemSummary() throws Exception {
+    // ルーム作成
+    Room room = new Room("テストルーム");
+    roomRepository.save(room);
+    UUID roomId = room.getId();
 
-        Participant participant2 = new Participant(room, "テストユーザー2");
-        participantRepository.save(participant2);
+    // 参加者を3人作成
+    Participant participant1 = new Participant(room, "テストユーザー1");
+    participantRepository.save(participant1);
 
-        Participant participant3 = new Participant(room, "テストユーザー3");
-        participantRepository.save(participant3);
- 
-        // 同じ参加者でStatusがACCEPTEDのアイテムを2つ用意する
-        Item item1 = new Item(room, participant1, "テストアイテム1", 100, 1, null);
-        item1.setStatus(ItemStatus.ACCEPTED);
-        itemRepository.save(item1);
-        // 値段を200、個数を2に設定
-        Item item2 = new Item(room, participant1, "テストアイテム2", 200, 2, null);
-        item2.setStatus(ItemStatus.ACCEPTED);
-        itemRepository.save(item2);
+    Participant participant2 = new Participant(room, "テストユーザー2");
+    participantRepository.save(participant2);
 
-        // PROPOSEDのアイテムを1つ作成
-        Item item3 = new Item(room, participant1, "テストアイテム3", 100, 1, null);
-        itemRepository.save(item3);
+    Participant participant3 = new Participant(room, "テストユーザー3");
+    participantRepository.save(participant3);
 
-        // REJECTEDのアイテムを作成
-        Item item4 = new Item(room, participant1, "テストアイテム4", 100, 1, null);
-        item4.setStatus(ItemStatus.REJECTED);
-        itemRepository.save(item4);
+    // 同じ参加者でStatusがACCEPTEDのアイテムを2つ用意する
+    Item item1 = new Item(room, participant1, "テストアイテム1", 100, 1, null);
+    item1.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item1);
+    // 値段を200、個数を2に設定
+    Item item2 = new Item(room, participant1, "テストアイテム2", 200, 2, null);
+    item2.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item2);
 
-        // participant2 でアイテムを作成。
-        // 同じ商品名で個数を3個にする
-        Item item5 = new Item(room, participant2, "テストアイテム1", 100, 3, null);
-        item5.setStatus(ItemStatus.ACCEPTED);
-        itemRepository.save(item5);
+    // PROPOSEDのアイテムを1つ作成
+    Item item3 = new Item(room, participant1, "テストアイテム3", 100, 1, null);
+    itemRepository.save(item3);
 
-        Item item6 = new Item(room, participant2, "テストアイテム5", 100, 1, null);
-        itemRepository.save(item6);
+    // REJECTEDのアイテムを作成
+    Item item4 = new Item(room, participant1, "テストアイテム4", 100, 1, null);
+    item4.setStatus(ItemStatus.REJECTED);
+    itemRepository.save(item4);
 
-        // participant3はREJECTEDのアイテムのみを持つ
-        Item item7 = new Item(room, participant3, "テストアイテム6", 100, 3, null);
-        item7.setStatus(ItemStatus.REJECTED);
-        itemRepository.save(item7);
+    // participant2 でアイテムを作成。
+    // 同じ商品名で個数を3個にする
+    Item item5 = new Item(room, participant2, "テストアイテム1", 100, 3, null);
+    item5.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item5);
 
-        Item item8 = new Item(room, participant3, "テストアイテム7", 100, 1, null);
-        item8.setStatus(ItemStatus.REJECTED);
-        itemRepository.save(item8);
+    Item item6 = new Item(room, participant2, "テストアイテム5", 100, 1, null);
+    itemRepository.save(item6);
 
-        mockMvc.perform(
-            get("/api/rooms/{roomId}/summary", roomId)
-                .contentType(MediaType.APPLICATION_JSON)
-        )
+    // participant3はREJECTEDのアイテムのみを持つ
+    Item item7 = new Item(room, participant3, "テストアイテム6", 100, 3, null);
+    item7.setStatus(ItemStatus.REJECTED);
+    itemRepository.save(item7);
+
+    Item item8 = new Item(room, participant3, "テストアイテム7", 100, 1, null);
+    item8.setStatus(ItemStatus.REJECTED);
+    itemRepository.save(item8);
+
+    mockMvc
+        .perform(get("/api/rooms/{roomId}/summary", roomId).contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalPrice").value(1000))
         .andExpect(jsonPath("$.participantSummaries.length()").value(2))
@@ -206,51 +190,46 @@ public class RoomControllerTest {
         .andExpect(jsonPath("$.itemNameSummaries[2].totalQuantity").value(1))
         .andExpect(jsonPath("$.itemNameSummaries[3].name").value("テストアイテム5"))
         .andExpect(jsonPath("$.itemNameSummaries[3].totalQuantity").value(1));
-    }
-    
-    @Test // roomIdが見つからない
-    void getItemSummaryNotFoundRoom() throws Exception {
-        UUID roomId = UUID.randomUUID();
-        
-        mockMvc.perform(
-            get("/api/rooms/{roomId}/summary", roomId)
-            .contentType(MediaType.APPLICATION_JSON)
-        )
+  }
+
+  @Test // roomIdが見つからない
+  void getItemSummaryNotFoundRoom() throws Exception {
+    UUID roomId = UUID.randomUUID();
+
+    mockMvc
+        .perform(get("/api/rooms/{roomId}/summary", roomId).contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"))
         .andExpect(jsonPath("$.message").value("ルームが見つかりません"));
-    }
+  }
 
-    @Test // アイテムが存在しない場合
-    void getItemSummaryEmptyList() throws Exception {
-        Room room = new Room("テストルーム");
-        roomRepository.save(room);
-        UUID roomId = room.getId();
+  @Test // アイテムが存在しない場合
+  void getItemSummaryEmptyList() throws Exception {
+    Room room = new Room("テストルーム");
+    roomRepository.save(room);
+    UUID roomId = room.getId();
 
-        mockMvc.perform(
-            get("/api/rooms/{roomId}/summary", roomId)
-            
-        )
+    mockMvc
+        .perform(get("/api/rooms/{roomId}/summary", roomId))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalPrice").value(0))
         .andExpect(jsonPath("$.participantSummaries").isEmpty())
         .andExpect(jsonPath("$.itemNameSummaries").isEmpty());
-    }
+  }
 
-    // getRoomテスト
-    @Test // 正常系1 hostKeyがResponseに含まれていないことを確認する
-    void getRoom() throws Exception {
-        Room room = new Room("テストルーム");
-        room.setBudgetAmount(20000);
-        room.setMemo("テストメモ");
-        room.setEventDate(LocalDate.of(2000, 1, 1));
-        roomRepository.save(room);
-        UUID roomId = room.getId();
+  // getRoomテスト
+  @Test // 正常系1 hostKeyがResponseに含まれていないことを確認する
+  void getRoom() throws Exception {
+    Room room = new Room("テストルーム");
+    room.setBudgetAmount(20000);
+    room.setMemo("テストメモ");
+    room.setEventDate(LocalDate.of(2000, 1, 1));
+    roomRepository.save(room);
+    UUID roomId = room.getId();
 
-        mockMvc.perform(
-            get("/api/rooms/{roomId}", roomId.toString())
-            .contentType(MediaType.APPLICATION_JSON)
-        )
+    mockMvc
+        .perform(
+            get("/api/rooms/{roomId}", roomId.toString()).contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(room.getId().toString()))
         .andExpect(jsonPath("$.title").value("テストルーム"))
@@ -259,36 +238,32 @@ public class RoomControllerTest {
         .andExpect(jsonPath("$.budgetAmount").value(20000))
         .andExpect(jsonPath("$.createdAt").exists())
         .andExpect(jsonPath("$.hostKey").doesNotExist());
-    }
-    
-    @Test // 正常系2 budgetAmountが未設定の場合でも200で通る
-    void getRoomNullBudgetAmount() throws Exception {
-        Room room = new Room("テストルーム");
-        room.setMemo("テストメモ");
-        room.setEventDate(LocalDate.of(2000, 1, 1));
-        roomRepository.save(room);
-        UUID roomId = room.getId();
+  }
 
-        mockMvc.perform(
-            get("/api/rooms/{roomId}", roomId.toString())
-            .contentType(MediaType.APPLICATION_JSON)
-        )
+  @Test // 正常系2 budgetAmountが未設定の場合でも200で通る
+  void getRoomNullBudgetAmount() throws Exception {
+    Room room = new Room("テストルーム");
+    room.setMemo("テストメモ");
+    room.setEventDate(LocalDate.of(2000, 1, 1));
+    roomRepository.save(room);
+    UUID roomId = room.getId();
+
+    mockMvc
+        .perform(
+            get("/api/rooms/{roomId}", roomId.toString()).contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.budgetAmount").isEmpty());
-    }
+  }
 
+  @Test // 異常系1 roomIdが存在しない
+  void getRoomNotFoundRoom() throws Exception {
+    UUID roomId = UUID.randomUUID();
 
-    @Test // 異常系1 roomIdが存在しない
-    void getRoomNotFoundRoom() throws Exception {
-        UUID roomId = UUID.randomUUID();
-
-        mockMvc.perform(
-            get("/api/rooms/{roomId}", roomId.toString())
-            .contentType(MediaType.APPLICATION_JSON)
-        )
+    mockMvc
+        .perform(
+            get("/api/rooms/{roomId}", roomId.toString()).contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"))
         .andExpect(jsonPath("$.message").value("ルームが見つかりません"));
-    }
-    
+  }
 }
