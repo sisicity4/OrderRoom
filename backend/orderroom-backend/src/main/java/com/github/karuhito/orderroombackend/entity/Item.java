@@ -10,259 +10,215 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-
 import java.time.Instant;
 import java.util.UUID;
-
 import org.hibernate.annotations.ColumnDefault;
-
-
 
 @Entity
 @Table(name = "items")
 public class Item {
-    @Id
-    @Column(
-        name = "id",
-        nullable = false,
-        updatable = false,
-        columnDefinition = "uuid DEFAULT gen_random_uuid()"
-    )
-    private UUID id;
+  @Id
+  @Column(
+      name = "id",
+      nullable = false,
+      updatable = false,
+      columnDefinition = "uuid DEFAULT gen_random_uuid()")
+  private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-        name = "room_id",
-        nullable = false
-    )
-    private Room room;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "room_id", nullable = false)
+  private Room room;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-        name = "participant_id",
-        nullable = false
-    )
-    private Participant participant;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "participant_id", nullable = false)
+  private Participant participant;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-        name = "paid_by_participant_id",
-        nullable = true,
-        columnDefinition = "uuid"
-    )
-    private Participant paidByParticipant;
-    
-    @Column(
-        name = "name",
-        length = 100,
-        nullable = false
-    )
-    private String name;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "paid_by_participant_id", nullable = true, columnDefinition = "uuid")
+  private Participant paidByParticipant;
 
-    @Column(
-        name = "price",
-        nullable = false,
-        check = @CheckConstraint(
-            name = "items_price_check",
-            constraint = "price >= 0"
-        )
-    )
-    @ColumnDefault("0")
-    private int price;
+  @Column(name = "name", length = 100, nullable = false)
+  private String name;
 
-    @Column(
-        name = "actual_price",
-        check =  @CheckConstraint(
-            name = "items_actual_price_check",
-            constraint = "actual_price >= 0"
-        )
-    )
-    private Integer actualPrice;
+  @Column(
+      name = "price",
+      nullable = false,
+      check = @CheckConstraint(name = "items_price_check", constraint = "price >= 0"))
+  @ColumnDefault("0")
+  private int price;
 
-    @Column(
-        name = "quantity",
-        nullable = false,
-        check = @CheckConstraint(
-            name = "items_quantity_check",
-            constraint = "quantity >= 1"
-        )    
-    )
-    @ColumnDefault("1")
-    private int quantity;
+  @Column(
+      name = "actual_price",
+      check = @CheckConstraint(name = "items_actual_price_check", constraint = "actual_price >= 0"))
+  private Integer actualPrice;
 
-    @Column(name = "memo")
-    private String memo;
+  @Column(
+      name = "quantity",
+      nullable = false,
+      check = @CheckConstraint(name = "items_quantity_check", constraint = "quantity >= 1"))
+  @ColumnDefault("1")
+  private int quantity;
 
-    @Column(
-        name = "status",
-        nullable = false,
-        check = @CheckConstraint(
-            name = "items_status_check",
-            constraint = "status in ('proposed', 'accepted', 'rejected')"
-        )
-    )
-    @ColumnDefault("'proposed'")
-    private ItemStatus status;
+  @Column(name = "memo")
+  private String memo;
 
-    @Column(
-        name = "purchased",
-        nullable = false,
-        columnDefinition = "boolean default false"
-    )
-    private boolean purchased;
+  @Column(
+      name = "status",
+      nullable = false,
+      check =
+          @CheckConstraint(
+              name = "items_status_check",
+              constraint = "status in ('proposed', 'accepted', 'rejected')"))
+  @ColumnDefault("'proposed'")
+  private ItemStatus status;
 
-    @Column(
-        name = "created_at",
-        nullable = false,
-        columnDefinition = "timestamp with time zone default now()"
-    )
-    private Instant createdAt;
+  @Column(name = "purchased", nullable = false, columnDefinition = "boolean default false")
+  private boolean purchased;
 
-    @PrePersist
-    protected void onCreate() {
-        Instant now = Instant.now();
-        if (this.id == null) {
-            this.id = UUID.randomUUID();
-        }
-        if (this.createdAt == null) {
-            this.createdAt = now;
-        }
-        this.updatedAt = now;
+  @Column(
+      name = "created_at",
+      nullable = false,
+      columnDefinition = "timestamp with time zone default now()")
+  private Instant createdAt;
+
+  @PrePersist
+  protected void onCreate() {
+    Instant now = Instant.now();
+    if (this.id == null) {
+      this.id = UUID.randomUUID();
     }
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
+    if (this.createdAt == null) {
+      this.createdAt = now;
     }
-    @Column(
-        name = "updated_at",
-        nullable = false,
-        columnDefinition = "timestamp with time zone default now()"
-    )
-    private Instant updatedAt;
+    this.updatedAt = now;
+  }
 
-    /**
-     * コンストラクタ
-     */
+  @PreUpdate
+  protected void onUpdate() {
+    this.updatedAt = Instant.now();
+  }
 
-    public Item() {
-        this.status = ItemStatus.PROPOSED;
-        this.purchased = false;
-    }
+  @Column(
+      name = "updated_at",
+      nullable = false,
+      columnDefinition = "timestamp with time zone default now()")
+  private Instant updatedAt;
 
-    public Item(Room room, Participant participant, String name) {
-        this.room = room;
-        this.participant = participant;
-        this.name = name;
-        this.status = ItemStatus.PROPOSED;
-        this.purchased = false;
-    }
+  /** コンストラクタ */
+  public Item() {
+    this.status = ItemStatus.PROPOSED;
+    this.purchased = false;
+  }
 
-    public Item(Room room, Participant participant, String name, int price, int quantity, String memo) {
-        this.room = room;
-        this.participant = participant;
-        this.name = name;
-        this.price = price;
-        this.quantity = quantity;
-        this.memo = memo;
-        this.status = ItemStatus.PROPOSED;
-        this.purchased = false;
-    }
+  public Item(Room room, Participant participant, String name) {
+    this.room = room;
+    this.participant = participant;
+    this.name = name;
+    this.status = ItemStatus.PROPOSED;
+    this.purchased = false;
+  }
 
-    /*  getter: id | room_id | participant_id | name | price | quantity | memo | status | created_at | updated_at
-    isPurchased でTrue / Falseをチェック
-    */
+  public Item(
+      Room room, Participant participant, String name, int price, int quantity, String memo) {
+    this.room = room;
+    this.participant = participant;
+    this.name = name;
+    this.price = price;
+    this.quantity = quantity;
+    this.memo = memo;
+    this.status = ItemStatus.PROPOSED;
+    this.purchased = false;
+  }
 
-    public UUID getId() {
-        return id;
-    }
+  /*  getter: id | room_id | participant_id | name | price | quantity | memo | status | created_at | updated_at
+  isPurchased でTrue / Falseをチェック
+  */
 
-    public Room getRoom() {
-        return room;
-    }
+  public UUID getId() {
+    return id;
+  }
 
-    public Participant getParticipant() {
-        return participant;
-    }
+  public Room getRoom() {
+    return room;
+  }
 
-    public String getName() {
-        return name;
-    }
+  public Participant getParticipant() {
+    return participant;
+  }
 
-    public int getPrice() {
-        return price;
-    }
+  public String getName() {
+    return name;
+  }
 
-    public int getQuantity() {
-        return quantity;
-    }
+  public int getPrice() {
+    return price;
+  }
 
-    public String getMemo() {
-        return memo;
-    }
+  public int getQuantity() {
+    return quantity;
+  }
 
-    public ItemStatus getStatus() {
-        return status;
-    }
+  public String getMemo() {
+    return memo;
+  }
 
-    public boolean isPurchased() {
-        return purchased;
-    }
+  public ItemStatus getStatus() {
+    return status;
+  }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+  public boolean isPurchased() {
+    return purchased;
+  }
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
 
-    public Integer getActualPrice() {
-        return actualPrice;
-    }
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
 
-    public Participant getPaidByParticipant() {
-        return paidByParticipant;
-    }
+  public Integer getActualPrice() {
+    return actualPrice;
+  }
 
-    /**
-     * setter
-     * issue#34で対応: name | price | quantity | memo
-     * issue#14で対応: status
-     * issue#15で対応: purchased
-     * issue#98で対応: actualPrice
-    */
+  public Participant getPaidByParticipant() {
+    return paidByParticipant;
+  }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+  /**
+   * setter issue#34で対応: name | price | quantity | memo issue#14で対応: status issue#15で対応: purchased
+   * issue#98で対応: actualPrice
+   */
+  public void setName(String name) {
+    this.name = name;
+  }
 
-    public void setPrice(int price) {
-        this.price = price;
-    }
+  public void setPrice(int price) {
+    this.price = price;
+  }
 
-    public void setQuantity(int quantity) {
-        this.quantity = quantity;
-    }
+  public void setQuantity(int quantity) {
+    this.quantity = quantity;
+  }
 
-    public void setMemo(String memo) {
-        this.memo = memo;
-    }
+  public void setMemo(String memo) {
+    this.memo = memo;
+  }
 
+  public void setStatus(ItemStatus status) {
+    this.status = status;
+  }
 
-    public void setStatus(ItemStatus status) {
-        this.status = status;
-    }
+  public void setPurchased(boolean purchased) {
+    this.purchased = purchased;
+  }
 
+  public void setActualPrice(Integer actualPrice) {
+    this.actualPrice = actualPrice;
+  }
 
-    public void setPurchased(boolean purchased) {
-        this.purchased = purchased;
-    }
-
-    public void setActualPrice(Integer actualPrice) {
-        this.actualPrice = actualPrice;
-    }
-    
-    public void setPaidByParticipant(Participant paidByParticipant) {
-        this.paidByParticipant = paidByParticipant;
-    }
+  public void setPaidByParticipant(Participant paidByParticipant) {
+    this.paidByParticipant = paidByParticipant;
+  }
 }

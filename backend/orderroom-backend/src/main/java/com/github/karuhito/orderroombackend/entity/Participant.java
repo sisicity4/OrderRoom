@@ -1,107 +1,89 @@
 package com.github.karuhito.orderroombackend.entity;
 
-import java.time.Instant;
-import java.util.UUID;
-
-
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
 
 /* 参加者テーブル  */
 @Entity
 @Table(name = "participants")
 public class Participant {
-    @Id
-    @Column(
-        name = "id",
-        updatable = false,
-        columnDefinition = "uuid DEFAULT gen_random_uuid()"
-    )
-    private UUID id;
+  @Id
+  @Column(name = "id", updatable = false, columnDefinition = "uuid DEFAULT gen_random_uuid()")
+  private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-        name = "room_id",
-        nullable = false
-    )
-    private Room room;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "room_id", nullable = false)
+  private Room room;
 
-    @Column(
-        name = "name",
-        length = 50,
-        nullable = false
-    )
-    private String name;
+  @Column(name = "name", length = 50, nullable = false)
+  private String name;
 
-    @Column(
-        name = "token",
-        nullable = false,
-        updatable = false,
-        unique = true,
-        columnDefinition = "uuid DEFAULT gen_random_uuid()"
-    )
-    private UUID token;
+  @Column(
+      name = "token",
+      nullable = false,
+      updatable = false,
+      unique = true,
+      columnDefinition = "uuid DEFAULT gen_random_uuid()")
+  private UUID token;
 
-    @Column(
-        name = "created_at",
-        nullable = false,
-        updatable = false,
-        columnDefinition = "timestamp with time zone DEFAULT now()"
-    )
-    private Instant createdAt;
+  @Column(
+      name = "created_at",
+      nullable = false,
+      updatable = false,
+      columnDefinition = "timestamp with time zone DEFAULT now()")
+  private Instant createdAt;
 
-    @PrePersist
-    protected void onCreate() {
-        if (this.id == null) {
-            this.id = UUID.randomUUID();
-        }
-        if (this.token == null) {
-            this.token = UUID.randomUUID();
-        }
-        if (this.createdAt == null) {
-            this.createdAt = Instant.now();
-        }
+  @PrePersist
+  protected void onCreate() {
+    if (this.id == null) {
+      this.id = UUID.randomUUID();
     }
-
-    /* 引数無しコンストラクタ */
-    public Participant() {
-
+    if (this.token == null) {
+      this.token = UUID.randomUUID();
     }
-
-    /* nameを持たせたコンストラクタ */
-    public Participant(Room room, String name) {
-        this.room = room;
-        this.name = name;
+    if (this.createdAt == null) {
+      this.createdAt = Instant.now();
     }
+  }
 
-    //getter: id | room_id | name | created_at | token
-    public UUID getId() {
-        return id;
-    }
+  /* 引数無しコンストラクタ */
+  public Participant() {}
 
-    public Room getRoom() {
-        return room;
-    }
+  /* nameを持たせたコンストラクタ */
+  public Participant(Room room, String name) {
+    this.room = room;
+    this.name = name;
+  }
 
-    public String getName() {
-        return name;
-    }
+  // getter: id | room_id | name | created_at | token
+  public UUID getId() {
+    return id;
+  }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+  public Room getRoom() {
+    return room;
+  }
 
-    public UUID getToken() {
-        return token;
-    }
+  public String getName() {
+    return name;
+  }
 
-    // setterなし: nameを編集するAPIは現状存在しないため、意図的に未実装(コンストラクタでのみ設定)
-    
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public UUID getToken() {
+    return token;
+  }
+
+  // setterなし: nameを編集するAPIは現状存在しないため、意図的に未実装(コンストラクタでのみ設定)
+
 }

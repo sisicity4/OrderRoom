@@ -13,6 +13,4 @@ public record CreateRoomResponse(
     UUID hostKey,
     String participantUrl,
     String hostUrl,
-    Instant createdAt
-) {
-}
+    Instant createdAt) {}

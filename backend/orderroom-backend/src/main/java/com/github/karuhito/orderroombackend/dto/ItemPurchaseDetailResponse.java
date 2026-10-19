@@ -7,6 +7,4 @@ public record ItemPurchaseDetailResponse(
     String name,
     Integer actualPrice,
     UUID paidByParticipantId,
-    String paidByParticipantName
-) {
-}
+    String paidByParticipantName) {}
