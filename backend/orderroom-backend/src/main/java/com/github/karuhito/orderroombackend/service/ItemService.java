@@ -1,22 +1,32 @@
 package com.github.karuhito.orderroombackend.service;
 
+import com.github.karuhito.orderroombackend.dto.ByStatus;
 import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateItemResponse;
 import com.github.karuhito.orderroombackend.dto.ItemListResponse;
 import com.github.karuhito.orderroombackend.dto.ItemNameSummary;
+import com.github.karuhito.orderroombackend.dto.ItemPurchaseDetailResponse;
 import com.github.karuhito.orderroombackend.dto.ItemSummaryResponse;
 import com.github.karuhito.orderroombackend.dto.ParticipantSummary;
+import com.github.karuhito.orderroombackend.dto.UpdateItemPurchaseDetailRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemPurchasedRequest;
+import com.github.karuhito.orderroombackend.dto.UpdateItemRequest;
 import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
 import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
+import com.github.karuhito.orderroombackend.exception.InvalidPurchaseDetailStateException;
+import com.github.karuhito.orderroombackend.exception.InvalidPurchaseDetailStateReason;
 import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
 import com.github.karuhito.orderroombackend.exception.ItemStatusInvalidException;
+import com.github.karuhito.orderroombackend.exception.NotItemOwnerException;
+import com.github.karuhito.orderroombackend.exception.ParticipantNotFoundException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
+import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
+import com.github.karuhito.orderroombackend.resolver.Operator;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -26,12 +36,17 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ItemService {
+  private final ParticipantRepository participantRepository;
   private final ItemRepository itemRepository;
   private final RoomRepository roomRepository;
 
-  public ItemService(ItemRepository itemRepository, RoomRepository roomRepository) {
+  public ItemService(
+      ItemRepository itemRepository,
+      RoomRepository roomRepository,
+      ParticipantRepository participantRepository) {
     this.itemRepository = itemRepository;
     this.roomRepository = roomRepository;
+    this.participantRepository = participantRepository;
   }
 
   public CreateItemResponse createItem(Participant participant, CreateItemRequest request) {
@@ -56,6 +71,11 @@ public class ItemService {
 
   public List<ItemListResponse> getItems(UUID roomId, ItemStatus status, UUID participantId) {
     roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
+    if (participantId != null) {
+      participantRepository
+          .findByIdAndRoomId(participantId, roomId)
+          .orElseThrow(() -> new ParticipantNotFoundException(participantId));
+    }
     List<Item> items = itemRepository.findItemsByRoomAndFilters(roomId, status, participantId);
     return items.stream()
         .map(
@@ -86,6 +106,7 @@ public class ItemService {
     // statusがACCEPTED以外になる場合、Purchasedをfalseにする
     if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
       item.setPurchased(false);
+      itemPurchaseDetailClear(item);
     }
 
     Item updatedItem = itemRepository.save(item);
@@ -112,9 +133,13 @@ public class ItemService {
             .findByIdAndRoomId(itemId, roomId)
             .orElseThrow(() -> new ItemNotFoundException(itemId));
 
-    // StatusがACCEPTED以外のときはItemStatusInvalidExceptionをthrow
-    if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
+    // StatusがACCEPTED以外かつPurchasedをTrueにしようとしている時はItemStatusInvalidExceptionをthrow
+    if (!item.getStatus().equals(ItemStatus.ACCEPTED) && request.purchased()) {
       throw new ItemStatusInvalidException(itemId, item.getStatus());
+    }
+    // 購入済みから未購入にしたい場合は購入詳細をnullに置き換えクリアする
+    if (!request.purchased()) {
+      itemPurchaseDetailClear(item);
     }
     item.setPurchased(request.purchased());
 
@@ -137,48 +162,244 @@ public class ItemService {
 
   public ItemSummaryResponse getItemSummary(UUID roomId) {
     // ルームIDの存在チェック
-    roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
-    // ルーム内のアイテム一覧を取得
+    Room room =
+        roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
+
     List<Item> items = itemRepository.findByRoomId(roomId);
 
-    // StatusがREJECTED以外のアイテムに絞り込む
-    List<Item> filteredItems =
-        items.stream().filter(item -> item.getStatus() != ItemStatus.REJECTED).toList();
-    int totalPrice =
-        filteredItems.stream().mapToInt(item -> item.getPrice() * item.getQuantity()).sum();
+    List<Item> acceptedItems =
+        items.stream().filter(item -> item.getStatus() == ItemStatus.ACCEPTED).toList();
+    List<Item> proposedItems =
+        items.stream().filter(item -> item.getStatus() == ItemStatus.PROPOSED).toList();
+    List<Item> rejectedItems =
+        items.stream().filter(item -> item.getStatus() == ItemStatus.REJECTED).toList();
+    int acceptedItemCount = acceptedItems.size();
 
-    // 参加者ごとのグループ化+合計金額
+    ByStatus byStatus =
+        new ByStatus(proposedItems.size(), acceptedItems.size(), rejectedItems.size());
+
+    int acceptedTotalPrice = sumEstimatedPrice(acceptedItems);
+    int proposedTotalPrice = sumEstimatedPrice(proposedItems);
+
+    Integer remainingBudget;
+    Integer overBudgetAmount;
+    Integer budgetAmount;
+
+    if (room.getBudgetAmount() != null) {
+      budgetAmount = room.getBudgetAmount();
+      remainingBudget = Math.max(0, budgetAmount - acceptedTotalPrice);
+      overBudgetAmount = Math.max(0, acceptedTotalPrice - room.getBudgetAmount());
+    } else {
+      remainingBudget = null;
+      overBudgetAmount = null;
+      budgetAmount = null;
+    }
+
     Map<UUID, List<Item>> itemsByParticipantId =
-        filteredItems.stream()
-            .collect(Collectors.groupingBy(item -> item.getParticipant().getId()));
-    List<ParticipantSummary> participantSummaries =
+        items.stream().collect(Collectors.groupingBy(item -> item.getParticipant().getId()));
+    List<ParticipantSummary> perParticipant =
         itemsByParticipantId.entrySet().stream()
             .sorted(
                 Comparator.comparing(
                     entry -> entry.getValue().get(0).getParticipant().getCreatedAt()))
-            .map(
-                entry ->
-                    new ParticipantSummary(
-                        entry.getKey(),
-                        entry.getValue().get(0).getParticipant().getName(),
-                        entry.getValue().stream()
-                            .mapToInt(item -> item.getPrice() * item.getQuantity())
-                            .sum()))
+            .map(entry -> toParticipantSummary(entry.getKey(), entry.getValue()))
             .toList();
 
-    // 商品名ごとのグループ化+合計数量
+    List<Item> acceptedAndProposedItems =
+        items.stream()
+            .filter(
+                item ->
+                    item.getStatus() == ItemStatus.ACCEPTED
+                        || item.getStatus() == ItemStatus.PROPOSED)
+            .toList();
     Map<String, List<Item>> itemsByName =
-        filteredItems.stream().collect(Collectors.groupingBy(item -> item.getName()));
-    List<ItemNameSummary> itemNameSummaries =
+        acceptedAndProposedItems.stream().collect(Collectors.groupingBy(item -> item.getName()));
+    List<ItemNameSummary> itemQuantities =
         itemsByName.entrySet().stream()
             .sorted(Comparator.comparing(entry -> entry.getKey()))
-            .map(
-                entry ->
-                    new ItemNameSummary(
-                        entry.getKey(),
-                        entry.getValue().stream().mapToInt(item -> item.getQuantity()).sum()))
+            .map(entry -> toItemNameSummary(entry.getKey(), entry.getValue()))
             .toList();
 
-    return new ItemSummaryResponse(totalPrice, participantSummaries, itemNameSummaries);
+    return new ItemSummaryResponse(
+        roomId,
+        acceptedTotalPrice,
+        proposedTotalPrice,
+        budgetAmount,
+        remainingBudget,
+        overBudgetAmount,
+        acceptedItemCount,
+        byStatus,
+        perParticipant,
+        itemQuantities);
+  }
+
+  /**
+   * アイテムリストの値段の合計を求めるメソッド
+   *
+   * @param items 合計の値段を求めたいアイテムのリスト
+   * @return リストの各要素の値段 * 個数の合計値
+   */
+  private int sumEstimatedPrice(List<Item> items) {
+    return items.stream().mapToInt(item -> item.getPrice() * item.getQuantity()).sum();
+  }
+
+  /**
+   * 参加者IDと参加者の作成したアイテムリストを渡してParticipantSummaryを返すメソッド
+   *
+   * @param participantId 参加者ID
+   * @param participantItems そのIDの参加者が作ったアイテムのリスト
+   * @return 参加者ID、 参加者の名前、アイテムのリストの長さ、アイテムリストの中で承認されたアイテムの価格の合計
+   */
+  private ParticipantSummary toParticipantSummary(UUID participantId, List<Item> participantItems) {
+    String participantName = participantItems.get(0).getParticipant().getName();
+    List<Item> acceptedItemsParticipant =
+        participantItems.stream().filter(item -> item.getStatus() == ItemStatus.ACCEPTED).toList();
+    int proposalCount = participantItems.size();
+    int acceptedTotalPrice = sumEstimatedPrice(acceptedItemsParticipant);
+    return new ParticipantSummary(
+        participantId, participantName, proposalCount, acceptedTotalPrice);
+  }
+
+  /**
+   * nameとList<Item>をわたしてItemNameSummaryにして返すメソッド
+   *
+   * @param name Itemのname
+   * @param sameNameItems Itemのstatusがrejectedのものを除いたItemリスト
+   * @return ItemNameSummaryを返す
+   */
+  private ItemNameSummary toItemNameSummary(String name, List<Item> sameNameItems) {
+    int totalQuantity = sameNameItems.stream().mapToInt(item -> item.getQuantity()).sum();
+    int estimatedTotalPrice = sumEstimatedPrice(sameNameItems);
+    return new ItemNameSummary(name, totalQuantity, estimatedTotalPrice);
+  }
+
+  public ItemListResponse updateItem(
+      UUID roomId, UUID itemId, Operator operator, UpdateItemRequest request) {
+    Item item =
+        itemRepository
+            .findByIdAndRoomId(itemId, roomId)
+            .orElseThrow(() -> new ItemNotFoundException(itemId));
+
+    checkOperatorCanModify(item, operator);
+    item.setName(request.name());
+    item.setPrice(request.price());
+    item.setQuantity(request.quantity());
+    item.setMemo(request.memo());
+    // ホストでない参加者による編集かつ status == ACCEPTEDの場合 status = PROPOSED , purchased = false に切り替える
+    if (!operator.isHost() && item.getStatus() == ItemStatus.ACCEPTED) {
+      item.setStatus(ItemStatus.PROPOSED);
+      item.setPurchased(false);
+      itemPurchaseDetailClear(item);
+    }
+
+    Item updatedItem = itemRepository.save(item);
+    return new ItemListResponse(
+        updatedItem.getId(),
+        updatedItem.getRoom().getId(),
+        updatedItem.getParticipant().getId(),
+        updatedItem.getParticipant().getName(),
+        updatedItem.getName(),
+        updatedItem.getPrice(),
+        updatedItem.getQuantity(),
+        updatedItem.getMemo(),
+        updatedItem.getStatus(),
+        updatedItem.isPurchased(),
+        updatedItem.getCreatedAt(),
+        updatedItem.getUpdatedAt());
+  }
+
+  public void deleteItem(UUID roomId, UUID itemId, Operator operator) {
+    Item item =
+        itemRepository
+            .findByIdAndRoomId(itemId, roomId)
+            .orElseThrow(() -> new ItemNotFoundException(itemId));
+    checkOperatorCanModify(item, operator);
+    itemRepository.delete(item);
+  }
+
+  /**
+   * 権限チェック(Roomのホスト or アイテム提案者の確認)
+   *
+   * @param item アイテムオブジェクト
+   * @param operator アイテム管理者
+   */
+  private void checkOperatorCanModify(Item item, Operator operator) {
+    if (!operator.isHost() && !operator.participantId().equals(item.getParticipant().getId())) {
+      throw new NotItemOwnerException(operator.participantId(), item.getId());
+    }
+  }
+
+  public ItemPurchaseDetailResponse updateItemPurchaseDetail(
+      UUID roomId, UUID itemId, UpdateItemPurchaseDetailRequest request) {
+    // 商品を取得
+    Item item =
+        itemRepository
+            .findByIdAndRoomId(itemId, roomId)
+            .orElseThrow(() -> new ItemNotFoundException(itemId));
+    // 状態を判定する
+    InvalidPurchaseDetailStateReason reason = itemDetailCheck(item);
+    // 原因なし
+    if (reason == null) {
+      // クリア
+      if (request.actualPrice() == null) {
+        itemPurchaseDetailClear(item);
+        itemRepository.save(item);
+        // 値あり
+      } else {
+        Participant newPaidByParticipant =
+            participantRepository
+                .findByIdAndRoomId(request.paidByParticipantId(), roomId)
+                .orElseThrow(() -> new ParticipantNotFoundException(request.paidByParticipantId()));
+        item.setActualPrice(request.actualPrice());
+        item.setPaidByParticipant(newPaidByParticipant);
+        itemRepository.save(item);
+      }
+      // 原因あり
+    } else {
+      if (request.actualPrice() != null) {
+        throw new InvalidPurchaseDetailStateException(itemId, reason);
+      }
+    }
+
+    // 購入者をitemから取り出す
+    Participant paidParticipant = item.getPaidByParticipant();
+    UUID paidParticipantId = null;
+    String paidParticipantName = null;
+    Integer actualPrice = null;
+    // 購入者が存在する場合、 値を代入する
+    if (paidParticipant != null) {
+      actualPrice = item.getActualPrice();
+      paidParticipantId = paidParticipant.getId();
+      paidParticipantName = paidParticipant.getName();
+    }
+    return new ItemPurchaseDetailResponse(
+        item.getId(), item.getName(), actualPrice, paidParticipantId, paidParticipantName);
+  }
+
+  /**
+   * updateItemPurchaseDetailでアイテムの状態を判定するメソッド
+   *
+   * @param item 判定するアイテムのオブジェクト
+   * @return StatusがAcceptedでない場合はNOT_ACCEPTED,
+   *     Purchasedがfalseの場合はNOT_PURCHASED、ACCEPTEDかつPurchased=trueの場合はnullを返す
+   */
+  private InvalidPurchaseDetailStateReason itemDetailCheck(Item item) {
+    if (item.getStatus() != ItemStatus.ACCEPTED) {
+      return InvalidPurchaseDetailStateReason.NOT_ACCEPTED;
+    }
+    if (!item.isPurchased()) {
+      return InvalidPurchaseDetailStateReason.NOT_PURCHASED;
+    }
+    return null;
+  }
+
+  /**
+   * アイテムの購入詳細フィールドをクリアするメソッド
+   *
+   * @param item クリアするアイテム
+   */
+  private void itemPurchaseDetailClear(Item item) {
+    item.setActualPrice(null);
+    item.setPaidByParticipant(null);
   }
 }

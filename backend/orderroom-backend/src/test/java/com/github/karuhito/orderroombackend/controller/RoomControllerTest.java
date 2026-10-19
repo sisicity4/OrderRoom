@@ -116,8 +116,41 @@ public class RoomControllerTest {
         .andExpect(jsonPath("$.fields.budgetAmount").value("予算上限をマイナスに設定することはできません"));
   }
 
+  @Test // 正常系 roomのtitleの長さが最大の場合
+  void createRoomValidTitleTest() throws Exception {
+
+    String title = "A".repeat(100);
+    CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000);
+
+    mockMvc
+        .perform(
+            post("/api/rooms")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.title").value(title))
+        .andExpect(jsonPath("$.hostKey").exists())
+        .andExpect(jsonPath("$.title").value(title));
+  }
+
+  @Test // 異常系: roomのtitleの長さが101文字の場合
+  void createRoomInvalidTitleTest() throws Exception {
+    String title = "A".repeat(101);
+    CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000);
+
+    mockMvc
+        .perform(
+            post("/api/rooms")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("VALID_ERROR"))
+        .andExpect(jsonPath("$.message").value("不正な入力です"))
+        .andExpect(jsonPath("$.fields.title").value("タイトルは100字以内で入力してください"));
+  }
+
   // アイテム集計のテスト
-  @Test
+  @Test // 正常系
   void getItemSummary() throws Exception {
     // ルーム作成
     Room room = new Room("テストルーム");
@@ -135,37 +168,39 @@ public class RoomControllerTest {
     participantRepository.save(participant3);
 
     // 同じ参加者でStatusがACCEPTEDのアイテムを2つ用意する
+    // participant1 でアイテムを作成
+    // 値段100 個数1 ステータスaccepted
     Item item1 = new Item(room, participant1, "テストアイテム1", 100, 1, null);
     item1.setStatus(ItemStatus.ACCEPTED);
     itemRepository.save(item1);
-    // 値段を200、個数を2に設定
+    // 値段200 個数2 ステータスaccepted
     Item item2 = new Item(room, participant1, "テストアイテム2", 200, 2, null);
     item2.setStatus(ItemStatus.ACCEPTED);
     itemRepository.save(item2);
-
-    // PROPOSEDのアイテムを1つ作成
+    // 値段100 個数1 ステータスproposed
     Item item3 = new Item(room, participant1, "テストアイテム3", 100, 1, null);
     itemRepository.save(item3);
-
-    // REJECTEDのアイテムを作成
+    // 値段100 個数1 ステータスrejected
     Item item4 = new Item(room, participant1, "テストアイテム4", 100, 1, null);
     item4.setStatus(ItemStatus.REJECTED);
     itemRepository.save(item4);
 
     // participant2 でアイテムを作成。
     // 同じ商品名で個数を3個にする
+    // 名前がitem1と同じ 値段100 個数3 ステータスaccepted
     Item item5 = new Item(room, participant2, "テストアイテム1", 100, 3, null);
     item5.setStatus(ItemStatus.ACCEPTED);
     itemRepository.save(item5);
-
+    // 値段100 個数1 ステータスproposed
     Item item6 = new Item(room, participant2, "テストアイテム5", 100, 1, null);
     itemRepository.save(item6);
 
     // participant3はREJECTEDのアイテムのみを持つ
+    // 値段100 個数3
     Item item7 = new Item(room, participant3, "テストアイテム6", 100, 3, null);
     item7.setStatus(ItemStatus.REJECTED);
     itemRepository.save(item7);
-
+    // 値段100 個数1
     Item item8 = new Item(room, participant3, "テストアイテム7", 100, 1, null);
     item8.setStatus(ItemStatus.REJECTED);
     itemRepository.save(item8);
@@ -173,23 +208,42 @@ public class RoomControllerTest {
     mockMvc
         .perform(get("/api/rooms/{roomId}/summary", roomId).contentType(MediaType.APPLICATION_JSON))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalPrice").value(1000))
-        .andExpect(jsonPath("$.participantSummaries.length()").value(2))
-        .andExpect(jsonPath("$.participantSummaries[0].id").value(participant1.getId().toString()))
-        .andExpect(jsonPath("$.participantSummaries[0].name").value("テストユーザー1"))
-        .andExpect(jsonPath("$.participantSummaries[0].totalPrice").value(600))
-        .andExpect(jsonPath("$.participantSummaries[1].id").value(participant2.getId().toString()))
-        .andExpect(jsonPath("$.participantSummaries[1].name").value("テストユーザー2"))
-        .andExpect(jsonPath("$.participantSummaries[1].totalPrice").value(400))
-        .andExpect(jsonPath("$.itemNameSummaries.length()").value(4))
-        .andExpect(jsonPath("$.itemNameSummaries[0].name").value("テストアイテム1"))
-        .andExpect(jsonPath("$.itemNameSummaries[0].totalQuantity").value(4))
-        .andExpect(jsonPath("$.itemNameSummaries[1].name").value("テストアイテム2"))
-        .andExpect(jsonPath("$.itemNameSummaries[1].totalQuantity").value(2))
-        .andExpect(jsonPath("$.itemNameSummaries[2].name").value("テストアイテム3"))
-        .andExpect(jsonPath("$.itemNameSummaries[2].totalQuantity").value(1))
-        .andExpect(jsonPath("$.itemNameSummaries[3].name").value("テストアイテム5"))
-        .andExpect(jsonPath("$.itemNameSummaries[3].totalQuantity").value(1));
+        .andExpect(jsonPath("$.acceptedTotalPrice").value(800))
+        .andExpect(jsonPath("$.proposedTotalPrice").value(200))
+        .andExpect(jsonPath("$.budgetAmount").isEmpty())
+        .andExpect(jsonPath("$.remainingBudget").isEmpty())
+        .andExpect(jsonPath("$.overBudgetAmount").isEmpty())
+        .andExpect(jsonPath("$.acceptedItemCount").value(3))
+        // byStatusでステータスごとの件数を確認
+        .andExpect(jsonPath("$.byStatus.accepted").value(3))
+        .andExpect(jsonPath("$.byStatus.proposed").value(2))
+        .andExpect(jsonPath("$.byStatus.rejected").value(3))
+        // 参加者ごとの集計
+        // 参加者の数の確認
+        .andExpect(jsonPath("$.perParticipant.length()").value(3))
+        // participant1 4件の提案 acceptedの合計金額500
+        .andExpect(
+            jsonPath("$.perParticipant[0].participantId").value(participant1.getId().toString()))
+        .andExpect(jsonPath("$.perParticipant[0].name").value("テストユーザー1"))
+        .andExpect(jsonPath("$.perParticipant[0].proposalCount").value(4))
+        .andExpect(jsonPath("$.perParticipant[0].acceptedTotalPrice").value(500))
+        // participant3 2件の提案 acceptedの合計は0
+        .andExpect(jsonPath("$.perParticipant[2].proposalCount").value(2))
+        .andExpect(jsonPath("$.perParticipant[2].acceptedTotalPrice").value(0))
+
+        // rejectedを除いたアイテムの名前ごとの集計
+        // rejected除外の確認
+        .andExpect(jsonPath("$.itemQuantities.length()").value(4))
+        // 合算の確認
+        .andExpect(jsonPath("$.itemQuantities[0].name").value("テストアイテム1"))
+        .andExpect(jsonPath("$.itemQuantities[0].totalQuantity").value(4))
+        .andExpect(jsonPath("$.itemQuantities[0].estimatedTotalPrice").value(400))
+        // proposedのみの商品を1件
+        .andExpect(jsonPath("$.itemQuantities[2].name").value("テストアイテム3"))
+        .andExpect(jsonPath("$.itemQuantities[2].totalQuantity").value(1))
+        .andExpect(jsonPath("$.itemQuantities[2].estimatedTotalPrice").value(100))
+        // 最後の要素を取得して商品名昇順になっているか確認
+        .andExpect(jsonPath("$.itemQuantities[3].name").value("テストアイテム5"));
   }
 
   @Test // roomIdが見つからない
@@ -212,9 +266,110 @@ public class RoomControllerTest {
     mockMvc
         .perform(get("/api/rooms/{roomId}/summary", roomId))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalPrice").value(0))
-        .andExpect(jsonPath("$.participantSummaries").isEmpty())
-        .andExpect(jsonPath("$.itemNameSummaries").isEmpty());
+        .andExpect(jsonPath("$.acceptedTotalPrice").value(0))
+        .andExpect(jsonPath("$.proposedTotalPrice").value(0))
+        .andExpect(jsonPath("$.budgetAmount").isEmpty())
+        .andExpect(jsonPath("$.remainingBudget").isEmpty())
+        .andExpect(jsonPath("$.overBudgetAmount").isEmpty())
+        .andExpect(jsonPath("$.acceptedItemCount").value(0))
+        .andExpect(jsonPath("$.byStatus.accepted").value(0))
+        .andExpect(jsonPath("$.byStatus.proposed").value(0))
+        .andExpect(jsonPath("$.byStatus.rejected").value(0))
+        .andExpect(jsonPath("$.perParticipant").isEmpty())
+        .andExpect(jsonPath("$.itemQuantities").isEmpty());
+  }
+
+  @Test // 予算内の場合 budgetAmountが設定値、remainingBudgetが残額、overBudgetAmount = 0になる
+  void getItemSummaryInBudgetAmount() throws Exception {
+    // ルーム作成 予算は1000
+    Room room = new Room("テストルーム");
+    room.setBudgetAmount(1000);
+    roomRepository.save(room);
+    UUID roomId = room.getId();
+
+    // 参加者を作成
+    Participant participant = new Participant(room, "テストユーザー");
+    participantRepository.save(participant);
+
+    // アイテムを2件作成
+    // 値段100 個数1 ステータスproposed
+    Item item1 = new Item(room, participant, "テストアイテム1", 100, 1, null);
+    item1.setStatus(ItemStatus.PROPOSED);
+    itemRepository.save(item1);
+    // 値段200 個数2 ステータスaccepted
+    Item item2 = new Item(room, participant, "テストアイテム2", 200, 2, null);
+    item2.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item2);
+
+    mockMvc
+        .perform(get("/api/rooms/{roomId}/summary", roomId).contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.budgetAmount").value(1000))
+        // item1の値段は残額から引かれていないことを確認
+        .andExpect(jsonPath("$.remainingBudget").value(600))
+        .andExpect(jsonPath("$.overBudgetAmount").value(0));
+  }
+
+  @Test // 予算とちょうどの場合
+  void getItemSummaryJustBudgetAmount() throws Exception {
+    // ルーム作成 予算は1000
+    Room room = new Room("テストルーム");
+    room.setBudgetAmount(1000);
+    roomRepository.save(room);
+    UUID roomId = room.getId();
+
+    // 参加者を作成
+    Participant participant = new Participant(room, "テストユーザー");
+    participantRepository.save(participant);
+
+    // アイテムを2件作成
+    // 値段100 個数6 ステータスaccepted
+    Item item1 = new Item(room, participant, "テストアイテム1", 100, 6, null);
+    item1.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item1);
+    // 値段200 個数2 ステータスaccepted
+    Item item2 = new Item(room, participant, "テストアイテム2", 200, 2, null);
+    item2.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item2);
+
+    mockMvc
+        .perform(get("/api/rooms/{roomId}/summary", roomId).contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.budgetAmount").value(1000))
+        // 予算ちょうどなのでremainingBudget と overBudgetが0になることを確認
+        .andExpect(jsonPath("$.remainingBudget").value(0))
+        .andExpect(jsonPath("$.overBudgetAmount").value(0));
+  }
+
+  @Test // 予算超過の場合 remainingBudget = 0、 overBudgetAmountが超えた分の数値になることを確認
+  void getItemSummaryOverBudgetAmount() throws Exception {
+    // ルーム作成 予算は1000
+    Room room = new Room("テストルーム");
+    room.setBudgetAmount(1000);
+    roomRepository.save(room);
+    UUID roomId = room.getId();
+
+    // 参加者を作成
+    Participant participant = new Participant(room, "テストユーザー");
+    participantRepository.save(participant);
+
+    // アイテムを2件作成
+    // 値段100 個数1 ステータスaccepted
+    Item item1 = new Item(room, participant, "テストアイテム1", 100, 1, null);
+    item1.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item1);
+    // 値段200 個数5 ステータスaccepted
+    Item item2 = new Item(room, participant, "テストアイテム2", 200, 5, null);
+    item2.setStatus(ItemStatus.ACCEPTED);
+    itemRepository.save(item2);
+
+    mockMvc
+        .perform(get("/api/rooms/{roomId}/summary", roomId).contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        // overBudgetAmountが100になることを確認
+        .andExpect(jsonPath("$.budgetAmount").value(1000))
+        .andExpect(jsonPath("$.remainingBudget").value(0))
+        .andExpect(jsonPath("$.overBudgetAmount").value(100));
   }
 
   // getRoomテスト

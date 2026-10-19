@@ -2,6 +2,7 @@ package com.github.karuhito.orderroombackend.config;
 
 import com.github.karuhito.orderroombackend.converter.StringToItemStatusConverter;
 import com.github.karuhito.orderroombackend.interceptor.HostKeyInterceptor;
+import com.github.karuhito.orderroombackend.resolver.OperatorArgumentResolver;
 import com.github.karuhito.orderroombackend.resolver.ParticipantArgumentResolver;
 import java.util.List;
 import org.springframework.context.annotation.Configuration;
@@ -15,19 +16,24 @@ public class WebMvcConfig implements WebMvcConfigurer {
   private final HostKeyInterceptor hostKeyInterceptor;
   private final StringToItemStatusConverter stringToItemStatusConverter;
   private final ParticipantArgumentResolver participantArgumentResolver;
+  private final OperatorArgumentResolver operatorArgumentResolver;
 
   public WebMvcConfig(
       HostKeyInterceptor hostKeyInterceptor,
       StringToItemStatusConverter stringToItemStatusConverter,
-      ParticipantArgumentResolver participantArgumentResolver) {
+      ParticipantArgumentResolver participantArgumentResolver,
+      OperatorArgumentResolver operatorArgumentResolver) {
     this.hostKeyInterceptor = hostKeyInterceptor;
     this.stringToItemStatusConverter = stringToItemStatusConverter;
     this.participantArgumentResolver = participantArgumentResolver;
+    this.operatorArgumentResolver = operatorArgumentResolver;
   }
 
   @Override
   public void addInterceptors(InterceptorRegistry registry) {
-    registry.addInterceptor(hostKeyInterceptor).addPathPatterns("/api/rooms/*/items/*/*");
+    registry
+        .addInterceptor(hostKeyInterceptor)
+        .addPathPatterns("/api/rooms/*/items/*/*", "/api/rooms/*/settlement-members");
   }
 
   @Override
@@ -38,5 +44,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
   @Override
   public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
     resolvers.add(participantArgumentResolver);
+    resolvers.add(operatorArgumentResolver);
   }
 }

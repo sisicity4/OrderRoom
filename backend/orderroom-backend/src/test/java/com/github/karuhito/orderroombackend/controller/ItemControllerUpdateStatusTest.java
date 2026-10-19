@@ -1,6 +1,7 @@
 package com.github.karuhito.orderroombackend.controller;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -10,6 +11,7 @@ import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
+import com.github.karuhito.orderroombackend.exception.ItemNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
@@ -220,6 +222,80 @@ public class ItemControllerUpdateStatusTest {
         .andExpect(jsonPath("$.status").value("accepted"));
   }
 
+  @Test // 正常系4: ACCEPTEDからproposedにした時、アイテムのactualPriceとpaidByParticipantがnullなるか確認
+  void updateStatusToProposedItemPurchaseDetailClearTest() throws Exception {
+    Room room = new Room("テストルーム");
+    roomRepository.save(room);
+    UUID roomId = room.getId();
+    UUID hostKey = room.getHostKey();
+
+    Participant participant = new Participant(room, "テスト参加者");
+    participantRepository.save(participant);
+
+    Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
+    item.setStatus(ItemStatus.ACCEPTED);
+    item.setPurchased(true);
+    item.setActualPrice(200);
+    item.setPaidByParticipant(participant);
+    itemRepository.save(item);
+    UUID itemId = item.getId();
+
+    UpdateItemStatusRequest request = new UpdateItemStatusRequest(ItemStatus.PROPOSED);
+
+    mockMvc
+        .perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/status", roomId, itemId)
+                .header("X-Host-Key", hostKey.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").exists())
+        .andExpect(jsonPath("$.status").value("proposed"))
+        .andExpect(jsonPath("$.purchased").value(false));
+
+    Item checkItem =
+        itemRepository.findById(itemId).orElseThrow(() -> new ItemNotFoundException(itemId));
+    assertNull(checkItem.getPaidByParticipant());
+    assertNull(checkItem.getActualPrice());
+  }
+
+  @Test // 正常系5: ACCEPTEDからproposedにした時、アイテムのactualPriceとpaidByParticipantがnullなるか確認
+  void updateStatusToRejectedItemPurchaseDetailClearTest() throws Exception {
+    Room room = new Room("テストルーム");
+    roomRepository.save(room);
+    UUID roomId = room.getId();
+    UUID hostKey = room.getHostKey();
+
+    Participant participant = new Participant(room, "テスト参加者");
+    participantRepository.save(participant);
+
+    Item item = new Item(room, participant, "テストアイテム", 100, 1, null);
+    item.setStatus(ItemStatus.ACCEPTED);
+    item.setPurchased(true);
+    item.setActualPrice(200);
+    item.setPaidByParticipant(participant);
+    itemRepository.save(item);
+    UUID itemId = item.getId();
+
+    UpdateItemStatusRequest request = new UpdateItemStatusRequest(ItemStatus.REJECTED);
+
+    mockMvc
+        .perform(
+            patch("/api/rooms/{roomId}/items/{itemId}/status", roomId, itemId)
+                .header("X-Host-Key", hostKey.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").exists())
+        .andExpect(jsonPath("$.status").value("rejected"))
+        .andExpect(jsonPath("$.purchased").value(false));
+
+    Item checkItem =
+        itemRepository.findById(itemId).orElseThrow(() -> new ItemNotFoundException(itemId));
+    assertNull(checkItem.getPaidByParticipant());
+    assertNull(checkItem.getActualPrice());
+  }
+
   // 異常系1: X-Host-Key欠如 → 403 FORBIDDEN（interceptor経由）
   @Test
   void updateStatusMissingHostKey() throws Exception {
@@ -236,7 +312,6 @@ public class ItemControllerUpdateStatusTest {
     UUID itemId = item.getId();
 
     UpdateItemStatusRequest request = new UpdateItemStatusRequest(ItemStatus.ACCEPTED);
-
     mockMvc
         .perform(
             patch("/api/rooms/{roomId}/items/{itemId}/status", roomId, itemId)

@@ -17,7 +17,6 @@ import org.hibernate.annotations.ColumnDefault;
 @Entity
 @Table(name = "items")
 public class Item {
-
   @Id
   @Column(
       name = "id",
@@ -34,6 +33,10 @@ public class Item {
   @JoinColumn(name = "participant_id", nullable = false)
   private Participant participant;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "paid_by_participant_id", nullable = true, columnDefinition = "uuid")
+  private Participant paidByParticipant;
+
   @Column(name = "name", length = 100, nullable = false)
   private String name;
 
@@ -43,6 +46,11 @@ public class Item {
       check = @CheckConstraint(name = "items_price_check", constraint = "price >= 0"))
   @ColumnDefault("0")
   private int price;
+
+  @Column(
+      name = "actual_price",
+      check = @CheckConstraint(name = "items_actual_price_check", constraint = "actual_price >= 0"))
+  private Integer actualPrice;
 
   @Column(
       name = "quantity",
@@ -170,8 +178,17 @@ public class Item {
     return updatedAt;
   }
 
+  public Integer getActualPrice() {
+    return actualPrice;
+  }
+
+  public Participant getPaidByParticipant() {
+    return paidByParticipant;
+  }
+
   /**
    * setter issue#34で対応: name | price | quantity | memo issue#14で対応: status issue#15で対応: purchased
+   * issue#98で対応: actualPrice
    */
   public void setName(String name) {
     this.name = name;
@@ -195,5 +212,13 @@ public class Item {
 
   public void setPurchased(boolean purchased) {
     this.purchased = purchased;
+  }
+
+  public void setActualPrice(Integer actualPrice) {
+    this.actualPrice = actualPrice;
+  }
+
+  public void setPaidByParticipant(Participant paidByParticipant) {
+    this.paidByParticipant = paidByParticipant;
   }
 }
