@@ -15,15 +15,13 @@ import java.time.Instant;
 import java.util.UUID;
 
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.Generated;
-import org.hibernate.generator.EventType;
+
 
 
 @Entity
 @Table(name = "items")
 public class Item {
     @Id
-    @Generated(event = EventType.INSERT)
     @Column(
         name = "id",
         nullable = false,
@@ -113,17 +111,23 @@ public class Item {
     )
     private boolean purchased;
 
-    @Generated(event = EventType.INSERT)
     @Column(
         name = "created_at",
         nullable = false,
-        columnDefinition = "timestamptz default now()"
+        columnDefinition = "timestamp with time zone default now()"
     )
     private Instant createdAt;
 
     @PrePersist
     protected void onCreate() {
-        this.updatedAt = Instant.now();
+        Instant now = Instant.now();
+        if (this.id == null) {
+            this.id = UUID.randomUUID();
+        }
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        this.updatedAt = now;
     }
     @PreUpdate
     protected void onUpdate() {
@@ -132,7 +136,7 @@ public class Item {
     @Column(
         name = "updated_at",
         nullable = false,
-        columnDefinition = "timestamptz default now()"
+        columnDefinition = "timestamp with time zone default now()"
     )
     private Instant updatedAt;
 

@@ -318,6 +318,20 @@ stateDiagram-v2
 
 ### 6.3 精算
 
+#### 精算対象者の置換（#112）
+
+`PUT /api/rooms/{roomId}/settlement-members` は `X-Host-Key` によるホスト認証を必須とする。
+
+- リクエスト: `{"participantIds": ["参加者UUID", "..."]}`
+- 成功: `200 OK`、`{"participantIds": ["保存した参加者UUID", "..."]}`（要求順）
+- 対象者は差分更新ではなく、指定された集合で全置換する。
+- 未指定、null、空配列、要素のnull、不正なUUID、重複IDは400。
+- 別ルームの参加者IDと存在しない参加者IDは、同じ404 `PARTICIPANT_NOT_FOUND` を返す。
+- 不正IDを含む場合はリクエスト全体を拒否し、既存の対象者を変更しない。
+- hostKeyの欠如・不正は403。参加者tokenでは代替できない。
+- 保存行がないルームは取得側で全参加者を対象とする。既定値を自動保存しない。
+- 本APIでは負担額・送金案を計算しない。
+
 | Method | Path | 権限 | 概要 |
 | --- | --- | --- | --- |
 | PUT | `/api/rooms/{roomId}/settlement-members` | ホスト | 精算対象者を置換 |

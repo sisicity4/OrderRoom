@@ -3,8 +3,7 @@ package com.github.karuhito.orderroombackend.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.hibernate.annotations.Generated;
-import org.hibernate.generator.EventType;
+
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,13 +12,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.PrePersist;
 
 /* 参加者テーブル  */
 @Entity
 @Table(name = "participants")
 public class Participant {
     @Id
-    @Generated(event = EventType.INSERT)
     @Column(
         name = "id",
         updatable = false,
@@ -41,7 +40,6 @@ public class Participant {
     )
     private String name;
 
-    @Generated
     @Column(
         name = "token",
         nullable = false,
@@ -51,14 +49,26 @@ public class Participant {
     )
     private UUID token;
 
-    @Generated(event = EventType.INSERT)
     @Column(
         name = "created_at",
         nullable = false,
         updatable = false,
-        columnDefinition = "timestamptz DEFAULT now()"
+        columnDefinition = "timestamp with time zone DEFAULT now()"
     )
     private Instant createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.id == null) {
+            this.id = UUID.randomUUID();
+        }
+        if (this.token == null) {
+            this.token = UUID.randomUUID();
+        }
+        if (this.createdAt == null) {
+            this.createdAt = Instant.now();
+        }
+    }
 
     /* 引数無しコンストラクタ */
     public Participant() {
