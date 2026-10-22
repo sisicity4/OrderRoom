@@ -58,4 +58,24 @@ public class GlobalExceptionHandlerTest {
         assertEquals("アイテムを購入済みにしている必要があります", response.getBody().message());
         assertNull(response.getBody().fields());
     }
+
+    @Test // 精算対象者が0人のとき、400と専用の識別子を返す
+    void noSettlementMembersTest() throws Exception {
+        NoSettlementMembersException ex = new NoSettlementMembersException(UUID.randomUUID());
+        ResponseEntity<ErrorResponse> response = handler.noSettlementMembersException(ex);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("NO_SETTLEMENT_MEMBERS", response.getBody().error());
+        assertEquals("精算対象者が0人のため、計算できません", response.getBody().message());
+        assertNull(response.getBody().fields());
+    }
+
+    @Test // 例外はログで原因を追えるよう、ルームIDを保持する
+    void noSettlementMembersExceptionKeepsRoomIdTest() throws Exception {
+        UUID roomId = UUID.randomUUID();
+        NoSettlementMembersException ex = new NoSettlementMembersException(roomId);
+
+        assertEquals(roomId.toString(), ex.getMessage());
+    }
 }
