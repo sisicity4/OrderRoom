@@ -20,7 +20,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
     private final ParticipantArgumentResolver participantArgumentResolver;
     private final OperatorArgumentResolver operatorArgumentResolver;
 
-    public WebMvcConfig(HostKeyInterceptor hostKeyInterceptor, StringToItemStatusConverter stringToItemStatusConverter, ParticipantArgumentResolver participantArgumentResolver, OperatorArgumentResolver operatorArgumentResolver) {
+    public WebMvcConfig(HostKeyInterceptor hostKeyInterceptor, StringToItemStatusConverter stringToItemStatusConverter,
+            ParticipantArgumentResolver participantArgumentResolver,
+            OperatorArgumentResolver operatorArgumentResolver) {
         this.hostKeyInterceptor = hostKeyInterceptor;
         this.stringToItemStatusConverter = stringToItemStatusConverter;
         this.participantArgumentResolver = participantArgumentResolver;
@@ -30,7 +32,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(hostKeyInterceptor)
-        .addPathPatterns("/api/rooms/*/items/*/*", "/api/rooms/*/settlement-members");
+                .addPathPatterns("/api/rooms/*/items/*/*", "/api/rooms/*/settlement-members", "/api/rooms/*/settlement/recalculate");
     }
 
     @Override
