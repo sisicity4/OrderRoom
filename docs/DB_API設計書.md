@@ -248,6 +248,7 @@ stateDiagram-v2
 | 400 | `VALID_ERROR` | 実装済み | Bean Validation失敗 |
 | 400 | `INVALID_ITEM_STATE` | 実装済み | accepted以外の商品をpurchased=trueにしようとした。または、accepted かつ purchased=true でない商品に、購入詳細（実購入額・購入者）を登録しようとした |
 | 400 | `TYPE_MISMATCH` | 実装済み | roomIdなどの型不正 |
+| 400 | `NO_SETTLEMENT_MEMBERS` | 実装済み | 精算対象者が0人のため再計算できない（`POST /settlement/recalculate`）。`GET /settlement`は同じ状態でも400にせず、200で`members`と`transfers`を空で返す |
 | 403 | `FORBIDDEN` | 実装済み | token、hostKey、操作権限の不一致 |
 | 404 | `ROOM_NOT_FOUND` | 実装済み | ルーム不存在 |
 | 404 | `PARTICIPANT_NOT_FOUND` | 実装済み | 参加者不存在、または別ルームの参加者 |
@@ -281,7 +282,8 @@ stateDiagram-v2
 - 商品編集・削除は未実装（Issue #34）。
 - 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
 - 現行実装のsummaryレスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、7.9の確定仕様とは互換性がない。
-- 精算対象者、立替精算案、精算済み記録は未実装。
+- 精算対象者の置換（#112）と、均等割り・立替額・送金案の計算（#113。`GET /settlement`、`POST /settlement/recalculate`）は実装済み。
+- 精算済み記録（精算済み変更、リセット）と、精算済み時の変更ロック（409 `CONFLICT`）は未実装（#114）。精算レスポンスの`settledAt`は常にnull、`locked`は常にfalseを返す。
 - FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
 - 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
 
@@ -339,6 +341,24 @@ stateDiagram-v2
 | GET | `/api/rooms/{roomId}/settlement` | 参加者またはホスト | 現在の精算結果取得 |
 | PATCH | `/api/rooms/{roomId}/settlements/{settlementId}/settled` | 支払側本人またはホスト | 精算済み変更 |
 | POST | `/api/rooms/{roomId}/settlement/reset` | ホスト | 全精算を未精算へ戻す |
+
+#### 精算結果の取得と再計算（#113）
+
+`POST /api/rooms/{roomId}/settlement/recalculate`（再計算）:
+
+- `X-Host-Key`によるホスト認証を必須とする。参加者tokenでは代替できない。
+- 精算対象者（2.4。保存行がなければ全参加者）と購入情報から負担額と送金案を計算し、**未精算の送金案を置き換えて**保存する。
+- 成功は`200 OK`で、精算レスポンス（7.11）を返す。
+- 精算対象者が0人のときは400 `NO_SETTLEMENT_MEMBERS`。既存の送金案は変更しない。
+- 同じルームの再計算はルームの行をロックして直列化する。途中で失敗しても、既存の送金案が消えた状態では残らない。
+
+`GET /api/rooms/{roomId}/settlement`（取得）:
+
+- `X-Participant-Token`または`X-Host-Key`を必須とする。どちらも無い、または不正なら403。
+- `members`は取得のたびに計算する。`transfers`は**保存済みをそのまま返し、取得時には再計算しない**。
+- 精算対象者が0人のルームは、400にせず200で`members`と`transfers`を空配列にして返す。
+
+注意: 再計算の後に購入情報（実購入額、購入者）や精算対象者を変更すると、最新の`members`と、古い`transfers`が食い違うことがある。食い違いは、ホストが再計算を呼ぶと解消する。FEは、購入情報や対象者を変更したあとに再計算を呼ぶ。
 
 ## 7. 主要リクエストとレスポンス
 
@@ -597,6 +617,57 @@ Response 200。参加登録順（createdAt昇順）の配列で返す。tokenは
 - createdAtは精算の端数配分（8.2）で参加登録順を決めるためにも使う
 - 権限は6.1のとおり参加者またはホストだが、現実装は認証ヘッダを検証していない（5.3、Issue #101）
 
+### 7.11 GET `/api/rooms/{roomId}/settlement`、POST `/api/rooms/{roomId}/settlement/recalculate`
+
+Header:
+
+| API | Header |
+| --- | --- |
+| GET | `X-Participant-Token`または`X-Host-Key`のどちらか |
+| POST | `X-Host-Key` |
+
+リクエストボディはない。どちらも、成功すると`200 OK`で同じ形のレスポンスを返す（例は8.5）。
+
+| 項目 | 内容 |
+| --- | --- |
+| `actualTotalPrice` | 計算対象の商品の実購入額の合計。未入力の商品は含まない |
+| `incompletePurchaseItems` | 計算対象外の商品（acceptedかつpurchasedだが、`actualPrice`か購入者が未入力）の`id`と`name`。商品の作成順（`createdAt`、同じなら`id`）。なければ`[]` |
+| `members` | 精算対象者と、対象外だが購入者になっている参加者。参加登録順（`createdAt`、同じなら`participantId`） |
+| `members[].participantId` / `name` | 参加者のIDと名前 |
+| `members[].burdenAmount` | 対象者は均等負担額、対象外の購入者は0 |
+| `members[].paidAmount` | その参加者が購入者になっている実購入額の合計 |
+| `members[].balanceAmount` | `paidAmount - burdenAmount`。**正なら受け取る側、負なら支払う側** |
+| `transfers` | 保存済みの送金案。`id`、`fromParticipantId`、`toParticipantId`、`amount`、`settledAt`。送金元の登録順、次に送金先の登録順で並べる |
+| `settledAt` | 常に`null`（精算済み記録は#114で実装する） |
+| `locked` | 常に`false`（精算済み時の変更ロックは#114で実装する） |
+
+チェックは次の順に行う。
+
+POST `/settlement/recalculate`:
+
+| 順 | 内容 | 失敗時 |
+| --- | --- | --- |
+| 1 | `roomId`の形式 | 400 `TYPE_MISMATCH` |
+| 2 | `X-Host-Key`の有無 | 403 `FORBIDDEN` |
+| 3 | ルームの存在 | 404 `ROOM_NOT_FOUND` |
+| 4 | `X-Host-Key`の一致（別ルームのキー、UUIDとして不正なキーを含む） | 403 `FORBIDDEN` |
+| 5 | 精算対象者が1人以上いること | 400 `NO_SETTLEMENT_MEMBERS` |
+| 6 | 計算し、未精算の送金案を置き換えて保存する | 200 |
+
+GET `/settlement`:
+
+| 順 | 内容 | 失敗時 |
+| --- | --- | --- |
+| 1 | `roomId`の形式 | 400 `TYPE_MISMATCH` |
+| 2 | 認証（参加者tokenまたはホストキー） | 403 `FORBIDDEN` |
+| 3 | ルームの存在（ホストキーで認証した場合） | 404 `ROOM_NOT_FOUND` |
+| 4 | 計算してレスポンスを組み立てる（対象者が0人なら`members`と`transfers`を空にする） | 200 |
+
+- 参加者tokenで認証する場合は、tokenと`roomId`の組で検証する。別ルームのtokenと、存在しないルームのtokenは、どちらも403になり、ルームの存在確認には使えない。
+- `members`は取得のたびに計算し、`transfers`は保存済みをそのまま返す（6.3）。食い違いうるため、購入情報や対象者を変更したあとは、再計算を呼ぶ。
+- 精算対象外の参加者が購入者になっている場合は、`members`に含める。負担額は0、立替額は数える。目印は付けない。余りの配分（8.2）は精算対象者の中だけで行う。
+- 現行実装差分: 精算済みの場合に409で拒否する処理は未実装である（#114。5.1の`CONFLICT`と同じ扱い）。
+
 ## 8. 精算計算
 
 ### 8.1 計算対象
@@ -617,6 +688,7 @@ acceptedかつpurchasedで、actualPriceと購入者が入力済みの商品だ�
 - 差額が負の人を支払側、正の人を受取側とする
 - 参加登録順で並べ、支払側と受取側を順に相殺する
 - 0円の送金案は作らない
+- 精算対象外の参加者が購入者になっている場合は、負担額0・立替額ありとして計算に含める。次の整合条件の「全参加者」は、精算対象者と、この対象外の購入者を指す
 
 必須の整合条件:
 
@@ -632,6 +704,8 @@ acceptedかつpurchasedで、actualPriceと購入者が入力済みの商品だ�
 - 精算済みが1件以上なら、実購入額、購入者、対象者、再計算を409で拒否する
 - resetは全件のsettledAtをNULLにする
 - reset後に購入情報を変え、recalculateで送金案を置き換えられる
+
+現行実装差分: 精算済みの記録、reset、409による拒否は未実装（#114）。現在は、再計算はいつでも実行でき、未精算の送金案だけを置き換える。
 
 ### 8.5 精算レスポンス例
 
