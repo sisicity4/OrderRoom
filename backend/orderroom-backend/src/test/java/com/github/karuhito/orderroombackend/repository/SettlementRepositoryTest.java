@@ -11,7 +11,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.github.karuhito.orderroombackend.entity.Participant;
@@ -29,10 +28,12 @@ class SettlementRepositoryTest {
     @Autowired ParticipantRepository participants;
     @Autowired EntityManager entityManager;
 
-    /* 精算済みの送金案を作る。settledAt を設定する手段は #114 まで無いので、テスト側で値を入れる */
+    private static final Instant SETTLED_AT = Instant.parse("2026-01-01T00:00:00Z");
+
+    /* 精算済みの送金案を作る */
     private Settlement settledSettlement(Room room, Participant from, Participant to, int amount) {
         Settlement settlement = new Settlement(room, from, to, amount);
-        ReflectionTestUtils.setField(settlement, "settledAt", Instant.parse("2026-01-01T00:00:00Z"));
+        settlement.markSettled(SETTLED_AT);
         return settlements.save(settlement);
     }
 
@@ -116,6 +117,93 @@ class SettlementRepositoryTest {
 
         assertThat(settlements.findByRoomId(room.getId())).isEmpty();
         assertThat(settlements.findByRoomIdAndSettledAtIsNull(room.getId())).isEmpty();
+    }
+
+    @Test
+    void existsSettledReturnsTrueWhenRoomHasAtLeastOneSettled() {
+        Room room = rooms.save(new Room("精算済みあり"));
+        Participant a = participants.save(new Participant(room, "A"));
+        Participant b = participants.save(new Participant(room, "B"));
+        settlements.save(new Settlement(room, a, b, 1000));
+        settledSettlement(room, b, a, 500);
+
+        assertThat(settlements.existsByRoomIdAndSettledAtIsNotNull(room.getId())).isTrue();
+    }
+
+    @Test
+    void existsSettledReturnsFalseWhenAllUnsettled() {
+        Room room = rooms.save(new Room("全件未精算"));
+        Participant a = participants.save(new Participant(room, "A"));
+        Participant b = participants.save(new Participant(room, "B"));
+        settlements.save(new Settlement(room, a, b, 1000));
+        settlements.save(new Settlement(room, b, a, 500));
+
+        assertThat(settlements.existsByRoomIdAndSettledAtIsNotNull(room.getId())).isFalse();
+    }
+
+    @Test
+    void existsSettledReturnsFalseWhenOnlyOtherRoomHasSettled() {
+        Room room = rooms.save(new Room("対象ルーム"));
+        Participant a = participants.save(new Participant(room, "A"));
+        Participant b = participants.save(new Participant(room, "B"));
+        settlements.save(new Settlement(room, a, b, 1000));
+        Room other = rooms.save(new Room("別ルーム"));
+        Participant c = participants.save(new Participant(other, "C"));
+        Participant d = participants.save(new Participant(other, "D"));
+        settledSettlement(other, c, d, 2000);
+
+        assertThat(settlements.existsByRoomIdAndSettledAtIsNotNull(room.getId())).isFalse();
+    }
+
+    @Test
+    void findByIdAndRoomIdReturnsSettlementWhenRoomMatches() {
+        Room room = rooms.save(new Room("組で取得"));
+        Participant a = participants.save(new Participant(room, "A"));
+        Participant b = participants.save(new Participant(room, "B"));
+        Settlement saved = settlements.save(new Settlement(room, a, b, 1000));
+
+        assertThat(settlements.findByIdAndRoomId(saved.getId(), room.getId()))
+            .get().extracting(Settlement::getId).isEqualTo(saved.getId());
+    }
+
+    @Test
+    void findByIdAndRoomIdReturnsEmptyWhenRoomDiffers() {
+        Room room = rooms.save(new Room("所属ルーム"));
+        Participant a = participants.save(new Participant(room, "A"));
+        Participant b = participants.save(new Participant(room, "B"));
+        Settlement saved = settlements.save(new Settlement(room, a, b, 1000));
+        Room other = rooms.save(new Room("別ルーム"));
+
+        assertThat(settlements.findByIdAndRoomId(saved.getId(), other.getId())).isEmpty();
+    }
+
+    @Test
+    void markSettledPersistsSettledAt() {
+        Room room = rooms.save(new Room("精算済みにする"));
+        Participant a = participants.save(new Participant(room, "A"));
+        Participant b = participants.save(new Participant(room, "B"));
+        Settlement saved = settlements.saveAndFlush(new Settlement(room, a, b, 1000));
+
+        saved.markSettled(SETTLED_AT);
+        settlements.saveAndFlush(saved);
+        entityManager.clear();
+
+        assertThat(settlements.findById(saved.getId()).orElseThrow().getSettledAt()).isEqualTo(SETTLED_AT);
+    }
+
+    @Test
+    void markUnsettledPersistsNullSettledAt() {
+        Room room = rooms.save(new Room("取り消す"));
+        Participant a = participants.save(new Participant(room, "A"));
+        Participant b = participants.save(new Participant(room, "B"));
+        Settlement saved = settledSettlement(room, a, b, 1000);
+        settlements.flush();
+
+        saved.markUnsettled();
+        settlements.saveAndFlush(saved);
+        entityManager.clear();
+
+        assertThat(settlements.findById(saved.getId()).orElseThrow().getSettledAt()).isNull();
     }
 
     @ParameterizedTest

@@ -127,5 +127,14 @@ public class Settlement {
 
     public Instant getCreatedAt() {
         return createdAt;
-    }   
+    }
+
+    public void markSettled(Instant settledAt) {
+        this.settledAt = settledAt;
+    }
+
+    public void markUnsettled() {
+        this.settledAt = null;
+    }
+
 }
