@@ -78,4 +78,67 @@ public class GlobalExceptionHandlerTest {
 
         assertEquals(roomId.toString(), ex.getMessage());
     }
+
+    @Test // 精算済みのため変更できないとき、409と CONFLICT を返す
+    void settlementLockedTest() throws Exception {
+        SettlementLockedException ex = new SettlementLockedException(UUID.randomUUID());
+        ResponseEntity<ErrorResponse> response = handler.settlementLockedException(ex);
+
+        assertEquals(409, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("CONFLICT", response.getBody().error());
+        assertEquals("精算済みのため、変更できません", response.getBody().message());
+        assertNull(response.getBody().fields());
+    }
+
+    @Test // 例外はログで原因を追えるよう、ルームIDを保持する
+    void settlementLockedExceptionKeepsRoomIdTest() throws Exception {
+        UUID roomId = UUID.randomUUID();
+        SettlementLockedException ex = new SettlementLockedException(roomId);
+
+        assertEquals(roomId.toString(), ex.getMessage());
+    }
+
+    @Test // 送金案が存在しないとき、404と SETTLEMENT_NOT_FOUND を返す
+    void settlementNotFoundTest() throws Exception {
+        SettlementNotFoundException ex = new SettlementNotFoundException(UUID.randomUUID());
+        ResponseEntity<ErrorResponse> response = handler.settlementNotFoundException(ex);
+
+        assertEquals(404, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("SETTLEMENT_NOT_FOUND", response.getBody().error());
+        assertEquals("送金案が見つかりません", response.getBody().message());
+        assertNull(response.getBody().fields());
+    }
+
+    @Test // 例外はログで原因を追えるよう、送金案IDを保持する
+    void settlementNotFoundExceptionKeepsSettlementIdTest() throws Exception {
+        UUID settlementId = UUID.randomUUID();
+        SettlementNotFoundException ex = new SettlementNotFoundException(settlementId);
+
+        assertEquals(settlementId.toString(), ex.getMessage());
+    }
+
+    @Test // 支払側本人でもホストでもないとき、403と FORBIDDEN を返す
+    void notSettlementPayerTest() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        NotSettlementPayerException ex = new NotSettlementPayerException(UUID.randomUUID(), UUID.randomUUID());
+        ResponseEntity<ErrorResponse> response = handler.notSettlementPayerException(ex, request);
+
+        assertEquals(403, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("FORBIDDEN", response.getBody().error());
+        assertEquals("送金案を操作する権限がありません", response.getBody().message());
+        assertNull(response.getBody().fields());
+    }
+
+    @Test // 例外はログで原因を追えるよう、参加者IDと送金案IDを保持する
+    void notSettlementPayerExceptionKeepsIdsTest() throws Exception {
+        UUID participantId = UUID.randomUUID();
+        UUID settlementId = UUID.randomUUID();
+        NotSettlementPayerException ex = new NotSettlementPayerException(participantId, settlementId);
+
+        assertEquals(participantId.toString(), ex.getMessage());
+        assertEquals(settlementId, ex.getSettlementId());
+    }
 }
