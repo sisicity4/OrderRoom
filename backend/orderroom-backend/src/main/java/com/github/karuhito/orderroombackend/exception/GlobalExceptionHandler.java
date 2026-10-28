@@ -138,4 +138,12 @@ public class GlobalExceptionHandler {
             ErrorResponse response = new ErrorResponse("INVALID_ITEM_STATE", message, null);
             return ResponseEntity.status(400).body(response);
         }
+
+        @ExceptionHandler(NoSettlementMembersException.class)
+        public ResponseEntity<ErrorResponse> noSettlementMembersException(NoSettlementMembersException ex) {
+
+            ErrorResponse response = new ErrorResponse("NO_SETTLEMENT_MEMBERS", "精算対象者が0人のため、計算できません", null);
+            return ResponseEntity.status(400).body(response);
+        }
+        
 }
