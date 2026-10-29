@@ -1,5 +1,6 @@
 package com.github.karuhito.orderroombackend.service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -22,11 +23,14 @@ import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Settlement;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.exception.NoSettlementMembersException;
+import com.github.karuhito.orderroombackend.exception.NotSettlementPayerException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
+import com.github.karuhito.orderroombackend.exception.SettlementNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
 import com.github.karuhito.orderroombackend.repository.SettlementRepository;
+import com.github.karuhito.orderroombackend.resolver.Operator;
 import com.github.karuhito.orderroombackend.service.SettlementCalculator.MemberResult;
 import com.github.karuhito.orderroombackend.service.SettlementCalculator.Person;
 import com.github.karuhito.orderroombackend.service.SettlementCalculator.Purchase;
@@ -41,15 +45,17 @@ public class SettlementService {
     private final SettlementRepository settlementRepository;
     private final SettlementMemberService settlementMemberService;
     private final SettlementCalculator settlementCalculator = new SettlementCalculator();
+    private final SettlementLockGuard settlementLockGuard;
 
     public SettlementService(RoomRepository roomRepository, ItemRepository itemRepository,
             ParticipantRepository participantRepository, SettlementRepository settlementRepository,
-            SettlementMemberService settlementMemberService) {
+            SettlementMemberService settlementMemberService, SettlementLockGuard settlementLockGuard) {
         this.roomRepository = roomRepository;
         this.itemRepository = itemRepository;
         this.participantRepository = participantRepository;
         this.settlementRepository = settlementRepository;
         this.settlementMemberService = settlementMemberService;
+        this.settlementLockGuard = settlementLockGuard;
 
     }
 
@@ -140,24 +146,7 @@ public class SettlementService {
 
     @Transactional(readOnly = true)
     public SettlementResponse getSettlement(UUID roomId) {
-        Prepared prepared = prepare(roomId);
-
-        List<MemberSummary> members;
-        List<TransferSummary> transfers;
-        if (prepared.result() == null) {
-            members = new ArrayList<>();
-            transfers = new ArrayList<>();
-        } else {
-            members = toMemberSummaries(prepared.result().members());
-            List<Settlement> settlements = settlementRepository.findByRoomId(roomId);
-            transfers = toTransferSummaries(settlements, prepared.participants());
-        }
-        return new SettlementResponse(
-                prepared.actualTotalPrice(),
-                prepared.incompletePurchaseItems(),
-                members,
-                transfers,
-                false);
+        return buildSettlementResponse(roomId);
     }
 
     @Transactional
@@ -185,6 +174,57 @@ public class SettlementService {
         List<MemberSummary> members = toMemberSummaries(prepared.result().members());
         List<TransferSummary> transfers = toTransferSummaries(savedSettlements, prepared.participants());
 
-        return new SettlementResponse(prepared.actualTotalPrice(), prepared.incompletePurchaseItems(), members, transfers, false);
+        return new SettlementResponse(prepared.actualTotalPrice(), prepared.incompletePurchaseItems(), members,
+                transfers, false);
+    }
+
+    private SettlementResponse buildSettlementResponse(UUID roomId) {
+        Prepared prepared = prepare(roomId);
+        boolean locked = settlementRepository.existsByRoomIdAndSettledAtIsNotNull(roomId);
+
+        List<MemberSummary> members;
+        List<TransferSummary> transfers;
+        if (prepared.result() == null) {
+            members = new ArrayList<>();
+            transfers = new ArrayList<>();
+        } else {
+            members = toMemberSummaries(prepared.result().members());
+            List<Settlement> settlements = settlementRepository.findByRoomId(roomId);
+            transfers = toTransferSummaries(settlements, prepared.participants());
+        }
+
+        return new SettlementResponse(
+                prepared.actualTotalPrice(),
+                prepared.incompletePurchaseItems(),
+                members,
+                transfers,
+                locked);
+    }
+
+    @Transactional
+    public SettlementResponse updateSettled(UUID roomId, UUID settlementId, Operator operator, boolean settled) {
+        settlementLockGuard.lockRoom(roomId);
+        Settlement settlement = settlementRepository.findByIdAndRoomId(settlementId, roomId)
+                .orElseThrow(() -> new SettlementNotFoundException(settlementId));
+        if (!operator.isHost() && !settlement.getFromParticipant().getId().equals(operator.participantId())) {
+            throw new NotSettlementPayerException(operator.participantId(), settlementId);
+        }
+        if (settled && settlement.getSettledAt() == null) {
+            settlement.markSettled(Instant.now());
+        }
+        if (!settled) {
+            settlement.markUnsettled();
+        }
+        return buildSettlementResponse(roomId);
+    }
+
+    @Transactional
+    public SettlementResponse resetSettled(UUID roomId) {
+        settlementLockGuard.lockRoom(roomId);
+        List<Settlement> settlements = settlementRepository.findByRoomId(roomId);
+        for (Settlement settlement : settlements) {
+            settlement.markUnsettled();
+        }
+        return buildSettlementResponse(roomId);
     }
 }

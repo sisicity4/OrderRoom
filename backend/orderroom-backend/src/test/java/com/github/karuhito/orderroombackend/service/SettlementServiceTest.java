@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,17 +25,24 @@ import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Settlement;
 import com.github.karuhito.orderroombackend.exception.NoSettlementMembersException;
+import com.github.karuhito.orderroombackend.exception.NotSettlementPayerException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
+import com.github.karuhito.orderroombackend.exception.SettlementNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
 import com.github.karuhito.orderroombackend.repository.SettlementRepository;
+import com.github.karuhito.orderroombackend.resolver.Operator;
+import com.github.karuhito.orderroombackend.resolver.OperatorType;
+
+import jakarta.persistence.EntityManager;
 
 /* 精算計算のServiceを、実際のDBで確認する（テスト後にロールバックするので、DBにデータは残らない） */
 @SpringBootTest
 @Transactional
 class SettlementServiceTest {
     private static final Instant BASE = Instant.parse("2026-01-01T00:00:00Z");
+    private static final Instant SETTLED_AT = Instant.parse("2026-02-01T00:00:00Z");
 
     @Autowired SettlementService service;
     @Autowired SettlementMemberService settlementMemberService;
@@ -42,6 +50,7 @@ class SettlementServiceTest {
     @Autowired ParticipantRepository participants;
     @Autowired ItemRepository items;
     @Autowired SettlementRepository settlements;
+    @Autowired EntityManager entityManager;
 
     // ---- テスト用の部品 ----
 
@@ -78,8 +87,36 @@ class SettlementServiceTest {
 
     private Settlement settledSettlement(Room room, Participant from, Participant to, int amount) {
         Settlement settlement = new Settlement(room, from, to, amount);
-        ReflectionTestUtils.setField(settlement, "settledAt", Instant.parse("2026-02-01T00:00:00Z"));
+        settlement.markSettled(SETTLED_AT);
         return settlements.save(settlement);
+    }
+
+    /* 精算済み変更の確認用: 支払側(B)→受取側(A)の未精算の送金案が1件と、どちらでもない参加者(C)がいるルーム */
+    private record Fixture(Room room, Participant receiver, Participant payer, Participant other, Settlement settlement) {
+    }
+
+    private Fixture fixture(String roomName) {
+        Room room = rooms.save(new Room(roomName));
+        Participant a = participant(room, "A", 0);
+        Participant b = participant(room, "B", 1);
+        Participant c = participant(room, "C", 2);
+        Settlement settlement = settlements.save(new Settlement(room, b, a, 1000));
+        return new Fixture(room, a, b, c, settlement);
+    }
+
+    private static Operator host() {
+        return new Operator(OperatorType.HOST, null);
+    }
+
+    private static Operator asParticipant(Participant participant) {
+        return new Operator(OperatorType.PARTICIPANT, participant.getId());
+    }
+
+    /* 1次キャッシュを捨てて、DBに保存されている settledAt を読み直す */
+    private Instant storedSettledAt(UUID settlementId) {
+        entityManager.flush();
+        entityManager.clear();
+        return settlements.findById(settlementId).orElseThrow().getSettledAt();
     }
 
     private static List<Object> memberRow(MemberSummary m) {
@@ -381,6 +418,189 @@ class SettlementServiceTest {
     @Test
     void getSettlementThrowsRoomNotFoundForUnknownRoom() {
         assertThatThrownBy(() -> service.getSettlement(UUID.randomUUID()))
+            .isInstanceOf(RoomNotFoundException.class);
+    }
+
+    @Test
+    void getSettlementReturnsActualSettledAtAndLockedWhenAnySettled() {
+        Room room = rooms.save(new Room("精算済みあり"));
+        Participant a = participant(room, "A", 0);
+        Participant b = participant(room, "B", 1);
+        Participant c = participant(room, "C", 2);
+        Settlement unsettled = settlements.save(new Settlement(room, c, a, 500));
+        Settlement settled = settledSettlement(room, b, a, 1000);
+
+        SettlementResponse response = service.getSettlement(room.getId());
+
+        assertThat(response.locked()).isTrue();
+        assertThat(response.transfers())
+            .extracting(TransferSummary::id, TransferSummary::settledAt)
+            .containsExactly(tuple(settled.getId(), SETTLED_AT), tuple(unsettled.getId(), null));
+    }
+
+    // ---- updateSettled ----
+
+    @Test
+    void updateSettledByPayerRecordsSettledAtAndLocks() {
+        Fixture f = fixture("支払側本人");
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        SettlementResponse response = service.updateSettled(
+            f.room().getId(), f.settlement().getId(), asParticipant(f.payer()), true);
+
+        Instant after = Instant.now();
+        assertThat(response.locked()).isTrue();
+        assertThat(response.transfers()).singleElement()
+            .satisfies(t -> assertThat(t.settledAt()).isBetween(before, after));
+        assertThat(storedSettledAt(f.settlement().getId())).isBetween(before, after);
+    }
+
+    @Test
+    void updateSettledByHostRecordsSettledAtForAnyTransfer() {
+        Fixture f = fixture("ホスト");
+        Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        SettlementResponse response = service.updateSettled(
+            f.room().getId(), f.settlement().getId(), host(), true);
+
+        Instant after = Instant.now();
+        assertThat(response.locked()).isTrue();
+        assertThat(response.transfers()).singleElement()
+            .satisfies(t -> assertThat(t.settledAt()).isBetween(before, after));
+        assertThat(storedSettledAt(f.settlement().getId())).isBetween(before, after);
+    }
+
+    @Test
+    void updateSettledRejectsParticipantWhoIsNeitherPayerNorHost() {
+        Fixture f = fixture("支払側以外");
+
+        assertThatThrownBy(() -> service.updateSettled(
+                f.room().getId(), f.settlement().getId(), asParticipant(f.other()), true))
+            .isInstanceOf(NotSettlementPayerException.class);
+        assertThat(storedSettledAt(f.settlement().getId())).isNull();
+    }
+
+    @Test
+    void updateSettledRejectsReceiver() {
+        Fixture f = fixture("受取側");
+
+        assertThatThrownBy(() -> service.updateSettled(
+                f.room().getId(), f.settlement().getId(), asParticipant(f.receiver()), true))
+            .isInstanceOf(NotSettlementPayerException.class);
+        assertThat(storedSettledAt(f.settlement().getId())).isNull();
+    }
+
+    @Test
+    void updateSettledTrueOnAlreadySettledKeepsOriginalSettledAt() {
+        Fixture f = fixture("精算済みに再度true");
+        f.settlement().markSettled(SETTLED_AT);
+        settlements.save(f.settlement());
+
+        SettlementResponse response = service.updateSettled(
+            f.room().getId(), f.settlement().getId(), asParticipant(f.payer()), true);
+
+        assertThat(response.transfers()).singleElement()
+            .extracting(TransferSummary::settledAt).isEqualTo(SETTLED_AT);
+        assertThat(storedSettledAt(f.settlement().getId())).isEqualTo(SETTLED_AT);
+    }
+
+    @Test
+    void updateSettledFalseClearsSettledAtAndUnlocksWhenNoneSettled() {
+        Fixture f = fixture("取り消し");
+        f.settlement().markSettled(SETTLED_AT);
+        settlements.save(f.settlement());
+
+        SettlementResponse response = service.updateSettled(
+            f.room().getId(), f.settlement().getId(), asParticipant(f.payer()), false);
+
+        assertThat(response.locked()).isFalse();
+        assertThat(response.transfers()).singleElement()
+            .extracting(TransferSummary::settledAt).isNull();
+        assertThat(storedSettledAt(f.settlement().getId())).isNull();
+    }
+
+    @Test
+    void updateSettledFalseKeepsLockedWhenAnotherIsStillSettled() {
+        Fixture f = fixture("一部だけ取り消し");
+        f.settlement().markSettled(SETTLED_AT);
+        settlements.save(f.settlement());
+        Settlement stillSettled = settledSettlement(f.room(), f.other(), f.receiver(), 500);
+
+        SettlementResponse response = service.updateSettled(
+            f.room().getId(), f.settlement().getId(), host(), false);
+
+        // 取り消したのは1件だけで、もう1件が精算済みのまま残るので locked は true
+        assertThat(response.locked()).isTrue();
+        assertThat(storedSettledAt(f.settlement().getId())).isNull();
+        assertThat(storedSettledAt(stillSettled.getId())).isEqualTo(SETTLED_AT);
+    }
+
+    @Test
+    void updateSettledThrowsSettlementNotFoundForUnknownSettlement() {
+        Fixture f = fixture("存在しない送金案");
+
+        assertThatThrownBy(() -> service.updateSettled(f.room().getId(), UUID.randomUUID(), host(), true))
+            .isInstanceOf(SettlementNotFoundException.class);
+    }
+
+    @Test
+    void updateSettledThrowsSettlementNotFoundForOtherRoomsSettlement() {
+        Fixture f = fixture("対象ルーム");
+        Fixture other = fixture("別ルーム");
+
+        assertThatThrownBy(() -> service.updateSettled(
+                f.room().getId(), other.settlement().getId(), host(), true))
+            .isInstanceOf(SettlementNotFoundException.class);
+        assertThat(storedSettledAt(other.settlement().getId())).isNull();
+    }
+
+    @Test
+    void updateSettledThrowsRoomNotFoundForUnknownRoom() {
+        assertThatThrownBy(() -> service.updateSettled(UUID.randomUUID(), UUID.randomUUID(), host(), true))
+            .isInstanceOf(RoomNotFoundException.class);
+    }
+
+    // ---- resetSettled ----
+
+    @Test
+    void resetSettledClearsAllSettledAtKeepsTransfersAndDoesNotTouchOtherRooms() {
+        Fixture f = fixture("リセット");
+        f.settlement().markSettled(SETTLED_AT);
+        settlements.save(f.settlement());
+        Settlement secondSettled = settledSettlement(f.room(), f.other(), f.receiver(), 500);
+        Fixture other = fixture("別ルーム");
+        other.settlement().markSettled(SETTLED_AT);
+        settlements.save(other.settlement());
+
+        SettlementResponse response = service.resetSettled(f.room().getId());
+
+        assertThat(response.locked()).isFalse();
+        assertThat(response.transfers())
+            .extracting(TransferSummary::id)
+            .containsExactlyInAnyOrder(f.settlement().getId(), secondSettled.getId());
+        assertThat(response.transfers()).allSatisfy(t -> assertThat(t.settledAt()).isNull());
+        // 送金案は消えず、settledAt だけが NULL に戻る。別ルームの精算済みはそのまま
+        assertThat(storedSettledAt(f.settlement().getId())).isNull();
+        assertThat(storedSettledAt(secondSettled.getId())).isNull();
+        assertThat(storedSettledAt(other.settlement().getId())).isEqualTo(SETTLED_AT);
+    }
+
+    @Test
+    void resetSettledDoesNothingWhenNoneSettled() {
+        Fixture f = fixture("精算済みなしのリセット");
+
+        SettlementResponse response = service.resetSettled(f.room().getId());
+
+        assertThat(response.locked()).isFalse();
+        assertThat(response.transfers())
+            .extracting(TransferSummary::id, TransferSummary::settledAt)
+            .containsExactly(tuple(f.settlement().getId(), null));
+        assertThat(settlements.findByRoomId(f.room().getId())).hasSize(1);
+    }
+
+    @Test
+    void resetSettledThrowsRoomNotFoundForUnknownRoom() {
+        assertThatThrownBy(() -> service.resetSettled(UUID.randomUUID()))
             .isInstanceOf(RoomNotFoundException.class);
     }
 }
