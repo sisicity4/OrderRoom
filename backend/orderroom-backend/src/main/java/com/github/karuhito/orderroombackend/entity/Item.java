@@ -33,14 +33,16 @@ public class Item {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
         name = "room_id",
-        nullable = false
+        nullable = false,
+        columnDefinition = "uuid"
     )
     private Room room;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
         name = "participant_id",
-        nullable = false
+        nullable = false,
+        columnDefinition = "uuid"
     )
     private Participant participant;
 
@@ -95,11 +97,7 @@ public class Item {
 
     @Column(
         name = "status",
-        nullable = false,
-        check = @CheckConstraint(
-            name = "items_status_check",
-            constraint = "status in ('proposed', 'accepted', 'rejected')"
-        )
+        nullable = false
     )
     @ColumnDefault("'proposed'")
     private ItemStatus status;
