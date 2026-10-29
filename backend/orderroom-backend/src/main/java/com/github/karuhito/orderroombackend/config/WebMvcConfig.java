@@ -32,7 +32,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(hostKeyInterceptor)
-                .addPathPatterns("/api/rooms/*/items/*/*", "/api/rooms/*/settlement-members", "/api/rooms/*/settlement/recalculate");
+                .addPathPatterns("/api/rooms/*/items/*/*", "/api/rooms/*/settlement-members", "/api/rooms/*/settlement/recalculate", "/api/rooms/*/settlement/reset");
     }
 
     @Override
