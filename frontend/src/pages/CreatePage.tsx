@@ -11,6 +11,7 @@ function CreatePage() {
   const [copied, setCopied] = useState(false);
   const [id, setId] = useState('');
   const [participantUrl, setParticipantUrl] = useState('');
+  const [hostKey, setHostKey] = useState('');
   const handleCreate = async () => {
     if (title.trim() === '') {
       setError('ルーム名を入力してください。');
@@ -33,6 +34,7 @@ function CreatePage() {
     localStorage.setItem(`host:${data.id}`, data.hostKey);
     setId(data.id);
     setParticipantUrl(data.participantUrl);
+    setHostKey(data.hostKey);
   }
   return (
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
@@ -91,7 +93,7 @@ function CreatePage() {
         <div className='flex flex-col gap-2 border border-dashed p-4'>
           <p className='border w-fit px-2'>伝票番号</p>
           <p className='break-all text-sm'>{participantUrl}</p>
-          <div className='flex gap-2'>
+          <div className='flex flex-wrap gap-2'>
             <button
               className='border px-3 py-1 cursor-pointer'
               onClick={async () => {
@@ -104,6 +106,9 @@ function CreatePage() {
               }}>URLをコピー</button>
             <button
               className='border px-3 py-1 ml-auto cursor-pointer'
+              onClick={() => navigate(`/rooms/${id}/host?key=${hostKey}`)}>管理画面へ</button>
+            <button
+              className='border px-3 py-1 cursor-pointer'
               onClick={() => navigate(`/rooms/${id}`)}>ルームへ進む</button>
           </div>
           {copied && <p className='text-[#7A6B57]'>コピーしました。</p>}
