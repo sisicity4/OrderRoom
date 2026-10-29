@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +22,7 @@ import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
+import com.github.karuhito.orderroombackend.entity.Settlement;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
@@ -328,6 +330,23 @@ class SettlementControllerTest {
         mvc.perform(get(SETTLEMENT_PATH, unknownRoomId).header("X-Host-Key", anyHostKey))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    void recalculateWithAnySettledIsConflictAndKeepsTransfers() throws Exception {
+        Settlement settled = new Settlement(room, b, a, 1000);
+        settled.markSettled(Instant.parse("2026-02-01T00:00:00Z"));
+        settlements.save(settled);
+
+        mvc.perform(post(RECALCULATE_PATH, room.getId())
+                .header("X-Host-Key", hostKeyOf(room)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("CONFLICT"))
+            .andExpect(jsonPath("$.message").value("精算済みのため、変更できません"))
+            .andExpect(jsonPath("$.fields").value(nullValue()));
+
+        assertThat(settlements.findByRoomId(room.getId()))
+            .extracting(Settlement::getId).containsExactly(settled.getId());
     }
 
     @Test

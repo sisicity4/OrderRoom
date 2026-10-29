@@ -23,13 +23,15 @@ public class SettlementMemberService {
     private final RoomRepository roomRepository;
     private final ParticipantRepository participantRepository;
     private final SettlementMemberRepository settlementMemberRepository;
+    private final SettlementLockGuard settlementLockGuard;
 
     public SettlementMemberService(RoomRepository roomRepository,
             ParticipantRepository participantRepository,
-            SettlementMemberRepository settlementMemberRepository) {
+            SettlementMemberRepository settlementMemberRepository, SettlementLockGuard settlementLockGuard) {
         this.roomRepository = roomRepository;
         this.participantRepository = participantRepository;
         this.settlementMemberRepository = settlementMemberRepository;
+        this.settlementLockGuard = settlementLockGuard;
     }
 
     /**
@@ -45,8 +47,8 @@ public class SettlementMemberService {
             throw new IllegalArgumentException("参加者IDを重複して指定できません");
         }
         // 同じルームへの置換を直列化し、同時更新による集合の混在を防ぐ。
-        roomRepository.findByIdForUpdate(roomId)
-            .orElseThrow(() -> new RoomNotFoundException(roomId));
+        settlementLockGuard.lockRoom(roomId);
+        settlementLockGuard.ensureNotSettled(roomId);
         Map<UUID, Participant> roomParticipants = participantRepository
             .findByRoomIdOrderByCreatedAtAsc(roomId).stream()
             .collect(Collectors.toMap(Participant::getId, Function.identity()));

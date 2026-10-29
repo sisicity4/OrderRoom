@@ -27,6 +27,7 @@ import com.github.karuhito.orderroombackend.entity.Settlement;
 import com.github.karuhito.orderroombackend.exception.NoSettlementMembersException;
 import com.github.karuhito.orderroombackend.exception.NotSettlementPayerException;
 import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
+import com.github.karuhito.orderroombackend.exception.SettlementLockedException;
 import com.github.karuhito.orderroombackend.exception.SettlementNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
@@ -183,24 +184,25 @@ class SettlementServiceTest {
         Participant b = participant(room, "B", 1);
         purchasedItem(room, a, "肉", 4000, a);
         Settlement oldUnsettled = settlements.save(new Settlement(room, b, a, 111));
-        Settlement settled = settledSettlement(room, a, b, 222);
         Room other = rooms.save(new Room("別ルーム"));
         Participant c = participant(other, "C", 0);
         Participant d = participant(other, "D", 1);
         Settlement otherUnsettled = settlements.save(new Settlement(other, c, d, 333));
+        // 別ルームの精算済みは、このルームの再計算を止めない
+        Settlement otherSettled = settledSettlement(other, d, c, 444);
 
         SettlementResponse response = service.recalculate(room.getId());
 
-        List<UUID> remainingIds = settlements.findByRoomId(room.getId()).stream().map(Settlement::getId).toList();
-        // 古い未精算は消え、精算済みは残り、新しい送金案(B→A 2000)が1件ある
-        assertThat(remainingIds).doesNotContain(oldUnsettled.getId()).contains(settled.getId()).hasSize(2);
+        // 古い未精算は消え、新しい送金案(B→A 2000)が1件だけある
+        assertThat(settlements.findByRoomId(room.getId()))
+            .extracting(Settlement::getId).doesNotContain(oldUnsettled.getId()).hasSize(1);
         assertThat(settlements.findByRoomIdAndSettledAtIsNull(room.getId()))
             .extracting(Settlement::getAmount).containsExactly(2000);
         assertThat(response.transfers())
-            .extracting(TransferSummary::amount).contains(2000);
+            .extracting(TransferSummary::amount).containsExactly(2000);
         // 別ルームには触れない
         assertThat(settlements.findByRoomId(other.getId()))
-            .extracting(Settlement::getId).containsExactly(otherUnsettled.getId());
+            .extracting(Settlement::getId).containsExactlyInAnyOrder(otherUnsettled.getId(), otherSettled.getId());
     }
 
     @Test
@@ -314,6 +316,57 @@ class SettlementServiceTest {
     void recalculateThrowsRoomNotFoundForUnknownRoom() {
         assertThatThrownBy(() -> service.recalculate(UUID.randomUUID()))
             .isInstanceOf(RoomNotFoundException.class);
+    }
+
+    @Test
+    void recalculateThrowsSettlementLockedAndKeepsTransfersWhenAnySettled() {
+        Room room = rooms.save(new Room("精算済みで再計算"));
+        Participant a = participant(room, "A", 0);
+        Participant b = participant(room, "B", 1);
+        Participant c = participant(room, "C", 2);
+        purchasedItem(room, a, "肉", 9000, a);
+        Settlement unsettled = settlements.save(new Settlement(room, c, a, 3000));
+        Settlement settled = settledSettlement(room, b, a, 3000);
+
+        assertThatThrownBy(() -> service.recalculate(room.getId()))
+            .isInstanceOf(SettlementLockedException.class)
+            .hasMessage(room.getId().toString());
+        // 未精算の送金案も消えず、置き換わらない
+        assertThat(settlements.findByRoomId(room.getId()))
+            .extracting(Settlement::getId).containsExactlyInAnyOrder(unsettled.getId(), settled.getId());
+    }
+
+    @Test
+    void recalculateChecksSettledBeforeNoSettlementMembers() {
+        // 対象者0人（参加者なし）のルームに精算済みがある状態は、通常の操作では作れない。
+        // 判定の順番（409 が 400 より先）だけを確かめるため、別ルームの参加者を指す送金案を直接保存する
+        Room room = rooms.save(new Room("参加者なしで精算済み"));
+        Room other = rooms.save(new Room("別ルーム"));
+        Participant c = participant(other, "C", 0);
+        Participant d = participant(other, "D", 1);
+        settledSettlement(room, c, d, 1000);
+
+        assertThatThrownBy(() -> service.recalculate(room.getId()))
+            .isInstanceOf(SettlementLockedException.class);
+    }
+
+    @Test
+    void recalculateSucceedsAfterReset() {
+        Room room = rooms.save(new Room("リセット後の再計算"));
+        Participant a = participant(room, "A", 0);
+        Participant b = participant(room, "B", 1);
+        purchasedItem(room, a, "肉", 4000, a);
+        settledSettlement(room, b, a, 1234);
+
+        service.resetSettled(room.getId());
+        SettlementResponse response = service.recalculate(room.getId());
+
+        // リセットで全件が未精算に戻るので、再計算で置き換わる
+        assertThat(response.locked()).isFalse();
+        assertThat(response.transfers())
+            .extracting(TransferSummary::fromParticipantId, TransferSummary::toParticipantId, TransferSummary::amount)
+            .containsExactly(tuple(b.getId(), a.getId(), 2000));
+        assertThat(settlements.findByRoomId(room.getId())).hasSize(1);
     }
 
     // ---- getSettlement ----

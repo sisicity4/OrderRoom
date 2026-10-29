@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -20,8 +21,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
+import com.github.karuhito.orderroombackend.entity.Settlement;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
+import com.github.karuhito.orderroombackend.repository.SettlementRepository;
 import com.github.karuhito.orderroombackend.service.SettlementMemberService;
 
 @SpringBootTest
@@ -30,6 +33,7 @@ class SettlementMemberControllerPutTest {
     @Autowired MockMvc mvc;
     @Autowired RoomRepository rooms;
     @Autowired ParticipantRepository participants;
+    @Autowired SettlementRepository settlements;
     @Autowired SettlementMemberService service;
     private Room room;
     private Participant a;
@@ -123,5 +127,20 @@ class SettlementMemberControllerPutTest {
             .header("X-Host-Key", room.getHostKey().toString())
             .contentType(MediaType.APPLICATION_JSON).content(body(a.getId())))
             .andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    void rejectsWithConflictWhenAnySettled() throws Exception {
+        Settlement settled = new Settlement(room, b, a, 1000);
+        settled.markSettled(Instant.parse("2026-02-01T00:00:00Z"));
+        settlements.save(settled);
+
+        mvc.perform(request(body(a.getId())))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value("CONFLICT"))
+            .andExpect(jsonPath("$.message").value("精算済みのため、変更できません"));
+        // 対象者は未設定（全員）のまま
+        assertThat(service.getEffectiveMembers(room.getId()))
+            .extracting(Participant::getId).containsExactlyInAnyOrder(a.getId(), b.getId());
     }
 }

@@ -24,11 +24,9 @@ import com.github.karuhito.orderroombackend.entity.Settlement;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.exception.NoSettlementMembersException;
 import com.github.karuhito.orderroombackend.exception.NotSettlementPayerException;
-import com.github.karuhito.orderroombackend.exception.RoomNotFoundException;
 import com.github.karuhito.orderroombackend.exception.SettlementNotFoundException;
 import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
-import com.github.karuhito.orderroombackend.repository.RoomRepository;
 import com.github.karuhito.orderroombackend.repository.SettlementRepository;
 import com.github.karuhito.orderroombackend.resolver.Operator;
 import com.github.karuhito.orderroombackend.service.SettlementCalculator.MemberResult;
@@ -39,7 +37,6 @@ import com.github.karuhito.orderroombackend.service.SettlementCalculator.Transfe
 
 @Service
 public class SettlementService {
-    private final RoomRepository roomRepository;
     private final ItemRepository itemRepository;
     private final ParticipantRepository participantRepository;
     private final SettlementRepository settlementRepository;
@@ -47,10 +44,9 @@ public class SettlementService {
     private final SettlementCalculator settlementCalculator = new SettlementCalculator();
     private final SettlementLockGuard settlementLockGuard;
 
-    public SettlementService(RoomRepository roomRepository, ItemRepository itemRepository,
+    public SettlementService(ItemRepository itemRepository,
             ParticipantRepository participantRepository, SettlementRepository settlementRepository,
             SettlementMemberService settlementMemberService, SettlementLockGuard settlementLockGuard) {
-        this.roomRepository = roomRepository;
         this.itemRepository = itemRepository;
         this.participantRepository = participantRepository;
         this.settlementRepository = settlementRepository;
@@ -151,7 +147,8 @@ public class SettlementService {
 
     @Transactional
     public SettlementResponse recalculate(UUID roomId) {
-        Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
+        Room room = settlementLockGuard.lockRoom(roomId);
+        settlementLockGuard.ensureNotSettled(roomId);
         Prepared prepared = prepare(roomId);
         if (prepared.targetCount() == 0) {
             throw new NoSettlementMembersException(roomId);
