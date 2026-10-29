@@ -249,11 +249,12 @@ stateDiagram-v2
 | 400 | `INVALID_ITEM_STATE` | 実装済み | accepted以外の商品をpurchased=trueにしようとした。または、accepted かつ purchased=true でない商品に、購入詳細（実購入額・購入者）を登録しようとした |
 | 400 | `TYPE_MISMATCH` | 実装済み | roomIdなどの型不正 |
 | 400 | `NO_SETTLEMENT_MEMBERS` | 実装済み | 精算対象者が0人のため再計算できない（`POST /settlement/recalculate`）。`GET /settlement`は同じ状態でも400にせず、200で`members`と`transfers`を空で返す |
-| 403 | `FORBIDDEN` | 実装済み | token、hostKey、操作権限の不一致 |
+| 403 | `FORBIDDEN` | 実装済み | token、hostKey、操作権限の不一致（支払側本人でもホストでもない参加者による精算済み変更を含む） |
 | 404 | `ROOM_NOT_FOUND` | 実装済み | ルーム不存在 |
 | 404 | `PARTICIPANT_NOT_FOUND` | 実装済み | 参加者不存在、または別ルームの参加者 |
 | 404 | `ITEM_NOT_FOUND` | 実装済み | 商品不存在 |
-| 409 | `CONFLICT` | 未実装 | 精算済みなど、現在状態と操作の競合 |
+| 404 | `SETTLEMENT_NOT_FOUND` | 実装済み | 送金案不存在、または別ルームの送金案（`PATCH /settlements/{settlementId}/settled`） |
+| 409 | `CONFLICT` | 実装済み | 精算済みの送金案が1件以上あるルームで、変更がロックされている操作を行った（8.4） |
 | 500 | `INTERNAL_ERROR` | 実装済み | 想定外のサーバー内部エラー（DBとの接続が切れた場合など） |
 
 ### 5.2 バリデーション
@@ -283,7 +284,7 @@ stateDiagram-v2
 - 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
 - 現行実装のsummaryレスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、7.9の確定仕様とは互換性がない。
 - 精算対象者の置換（#112）と、均等割り・立替額・送金案の計算（#113。`GET /settlement`、`POST /settlement/recalculate`）は実装済み。
-- 精算済み記録（精算済み変更、リセット）と、精算済み時の変更ロック（409 `CONFLICT`）は未実装（#114）。精算レスポンスの`settledAt`は常にnull、`locked`は常にfalseを返す。
+- 精算済み記録（精算済み変更、リセット）と、精算済み時の変更ロック（409 `CONFLICT`）は実装済み（#114）。精算レスポンスの`settledAt`と`locked`は実値を返す。
 - FEは多くのAPIに未接続で、作成、参加、商品提案、一覧、ホスト操作のE2E導線は未完成。
 - 外部DB認証情報なしではアプリ起動・自動テストが失敗する可能性がある。
 
@@ -333,6 +334,8 @@ stateDiagram-v2
 - hostKeyの欠如・不正は403。参加者tokenでは代替できない。
 - 保存行がないルームは取得側で全参加者を対象とする。既定値を自動保存しない。
 - 本APIでは負担額・送金案を計算しない。
+- 精算済みの送金案が1件以上あるルームでは409 `CONFLICT`。既存の対象者を変更しない（8.4）。
+- チェックは、ホストキーとルームの存在（403 / 404 `ROOM_NOT_FOUND`）→ 入力形式（400）→ 精算済み（409）→ 参加者の存在（404 `PARTICIPANT_NOT_FOUND`）の順に行う。
 
 | Method | Path | 権限 | 概要 |
 | --- | --- | --- | --- |
@@ -350,6 +353,7 @@ stateDiagram-v2
 - 精算対象者（2.4。保存行がなければ全参加者）と購入情報から負担額と送金案を計算し、**未精算の送金案を置き換えて**保存する。
 - 成功は`200 OK`で、精算レスポンス（7.11）を返す。
 - 精算対象者が0人のときは400 `NO_SETTLEMENT_MEMBERS`。既存の送金案は変更しない。
+- 精算済みの送金案が1件以上あるときは409 `CONFLICT`。既存の送金案は変更しない。対象者0人の400より先に判定する（8.4）。
 - 同じルームの再計算はルームの行をロックして直列化する。途中で失敗しても、既存の送金案が消えた状態では残らない。
 
 `GET /api/rooms/{roomId}/settlement`（取得）:
@@ -359,6 +363,27 @@ stateDiagram-v2
 - 精算対象者が0人のルームは、400にせず200で`members`と`transfers`を空配列にして返す。
 
 注意: 再計算の後に購入情報（実購入額、購入者）や精算対象者を変更すると、最新の`members`と、古い`transfers`が食い違うことがある。食い違いは、ホストが再計算を呼ぶと解消する。FEは、購入情報や対象者を変更したあとに再計算を呼ぶ。
+
+#### 精算済みの変更とリセット（#114）
+
+`PATCH /api/rooms/{roomId}/settlements/{settlementId}/settled`（精算済みの変更。詳細は7.12）:
+
+- 送金案1件を精算済みにする、または精算済みを取り消す。
+- 支払側本人（`X-Participant-Token`）またはホスト（`X-Host-Key`）が操作できる。受取側を含む、それ以外の参加者は403。
+- `{"settled": true}`で`settledAt`に現在時刻を入れる。すでに精算済みの送金案に`true`を送った場合は200で、元の`settledAt`を変えない。
+- `{"settled": false}`で`settledAt`をNULLに戻す（取り消し）。
+- 存在しない`settlementId`と、別ルームの`settlementId`は、同じ404 `SETTLEMENT_NOT_FOUND`。
+
+`POST /api/rooms/{roomId}/settlement/reset`（リセット。詳細は7.13）:
+
+- ホストだけが操作できる。参加者tokenでは代替できない。
+- ルームの全送金案の`settledAt`をNULLに戻す。**送金案そのものは消さない**。
+- 精算済みが0件でも200（何も変更しない）。
+
+共通:
+
+- どちらも成功すると`200 OK`で、精算レスポンス（7.11）を返す。
+- どちらもルームの行をロックしてから処理する。8.4の変更ロックの判定と直列化され、判定と更新の間に精算済みが割り込まない。
 
 ## 7. 主要リクエストとレスポンス
 
@@ -472,6 +497,8 @@ Query:
 - ホスト編集ではstatusを維持できる
 - status、purchased、actualPrice、paidByParticipantIdはこのAPIで変更しない
 - 編集キャンセルはFE内で処理し、保存リクエストを送らない
+- 精算済みの送金案が1件以上あるルームでは、編集・削除（DELETE `/api/rooms/{roomId}/items/{itemId}`）とも409 `CONFLICT`（8.4）
+- 編集・削除のチェックは、認証（403）→ 入力形式（400、編集のみ）→ 商品の存在（404 `ITEM_NOT_FOUND`）→ 操作権限（403。提案者本人かホスト）→ 精算済み（409）の順に行う。権限のない参加者には、精算済みかどうかにかかわらず403を返す
 
 ### 7.7 PATCH status・purchased
 
@@ -497,6 +524,8 @@ accepted以外の商品をpurchased=trueにする要求は400 `INVALID_ITEM_STAT
 
 purchasedをfalseへ戻した場合はactualPriceとpaidByParticipantIdをNULLへ戻す。精算済みがある場合は変更を409で拒否する。
 
+status・purchasedとも、精算済みの送金案が1件以上あるルームでは409 `CONFLICT`。チェックは、ホストキー（403）→ 入力形式（400）→ 商品の存在（404 `ITEM_NOT_FOUND`）→ 精算済み（409）→ 商品の状態（400 `INVALID_ITEM_STATE`）の順に行う。
+
 status変更、purchased変更、編集、削除の後は、FEが一覧とsummaryを再取得するか、同等の計算で一覧、採用済み合計、提案中合計、予算との差額を即時更新する。
 
 ### 7.8 PATCH purchase-detail
@@ -516,7 +545,7 @@ actualPriceは単価ではなく、この商品行全体の実支払額である
 - `actualPrice`と`paidByParticipantId`は両方入力するか、両方nullにするかのどちらかとする
 - 両方nullのリクエストは、購入詳細のクリアとして扱う
 - 値を登録できるのは、accepted かつ purchased=true の商品だけとする
-- クリアは商品の状態にかかわらず200を返す。状態が合わない商品では何も変更しない
+- クリアは商品の状態にかかわらず200を返す。状態が合わない商品では何も変更しない。ただし、精算済みの送金案が1件以上あるルームでは、クリアも409 `CONFLICT`とする（状態が合わず何も変更しない商品でも409）
 
 チェックは次の順に行う。
 
@@ -525,8 +554,9 @@ actualPriceは単価ではなく、この商品行全体の実支払額である
 | 1 | ホストキー | 403 `FORBIDDEN` |
 | 2 | 入力形式（片方だけの入力、`actualPrice`が負の値） | 400 `VALID_ERROR`。`fields`に原因の項目を入れる |
 | 3 | 商品の存在（別ルームの商品を含む） | 404 `ITEM_NOT_FOUND` |
-| 4 | 商品の状態（値ありのときだけ） | 400 `INVALID_ITEM_STATE` |
-| 5 | 購入者の存在（別ルームの参加者を含む） | 404 `PARTICIPANT_NOT_FOUND` |
+| 4 | 精算済みの送金案がないこと（値あり・クリアとも） | 409 `CONFLICT` |
+| 5 | 商品の状態（値ありのときだけ） | 400 `INVALID_ITEM_STATE` |
+| 6 | 購入者の存在（別ルームの参加者を含む） | 404 `PARTICIPANT_NOT_FOUND` |
 
 `INVALID_ITEM_STATE`は、商品の状態によってメッセージを出し分ける。
 
@@ -558,7 +588,6 @@ actualPriceは単価ではなく、この商品行全体の実支払額である
 現行実装差分:
 
 - 商品一覧（7.5）のレスポンスには、`actualPrice`と購入者は含まれない。登録済みの購入詳細は、このAPIのレスポンスでだけ確認できる。
-- 精算済みの場合に409で拒否する処理は、未実装である（5.1の`CONFLICT`と同じ扱い）。
 
 ### 7.9 GET `/api/rooms/{roomId}/summary`
 現行実装差分: 2026-08-03時点の実装レスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、accepted/proposed別集計、予算差分、byStatus、acceptedItemCount、estimatedTotalPriceは未実装。
@@ -638,8 +667,8 @@ Header:
 | `members[].paidAmount` | その参加者が購入者になっている実購入額の合計 |
 | `members[].balanceAmount` | `paidAmount - burdenAmount`。**正なら受け取る側、負なら支払う側** |
 | `transfers` | 保存済みの送金案。`id`、`fromParticipantId`、`toParticipantId`、`amount`、`settledAt`。送金元の登録順、次に送金先の登録順で並べる |
-| `settledAt` | 常に`null`（精算済み記録は#114で実装する） |
-| `locked` | 常に`false`（精算済み時の変更ロックは#114で実装する） |
+| `transfers[].settledAt` | 精算済みにした日時（ISO 8601 UTC）。未精算なら`null` |
+| `locked` | 精算済みの送金案が1件以上あれば`true`。`true`の間は、8.4の操作が409になる |
 
 チェックは次の順に行う。
 
@@ -651,8 +680,9 @@ POST `/settlement/recalculate`:
 | 2 | `X-Host-Key`の有無 | 403 `FORBIDDEN` |
 | 3 | ルームの存在 | 404 `ROOM_NOT_FOUND` |
 | 4 | `X-Host-Key`の一致（別ルームのキー、UUIDとして不正なキーを含む） | 403 `FORBIDDEN` |
-| 5 | 精算対象者が1人以上いること | 400 `NO_SETTLEMENT_MEMBERS` |
-| 6 | 計算し、未精算の送金案を置き換えて保存する | 200 |
+| 5 | 精算済みの送金案がないこと | 409 `CONFLICT` |
+| 6 | 精算対象者が1人以上いること | 400 `NO_SETTLEMENT_MEMBERS` |
+| 7 | 計算し、未精算の送金案を置き換えて保存する | 200 |
 
 GET `/settlement`:
 
@@ -666,7 +696,57 @@ GET `/settlement`:
 - 参加者tokenで認証する場合は、tokenと`roomId`の組で検証する。別ルームのtokenと、存在しないルームのtokenは、どちらも403になり、ルームの存在確認には使えない。
 - `members`は取得のたびに計算し、`transfers`は保存済みをそのまま返す（6.3）。食い違いうるため、購入情報や対象者を変更したあとは、再計算を呼ぶ。
 - 精算対象外の参加者が購入者になっている場合は、`members`に含める。負担額は0、立替額は数える。目印は付けない。余りの配分（8.2）は精算対象者の中だけで行う。
-- 現行実装差分: 精算済みの場合に409で拒否する処理は未実装である（#114。5.1の`CONFLICT`と同じ扱い）。
+- 再計算は精算済みが1件以上あると409になるため、再計算のレスポンスの`locked`は常に`false`になる。
+
+### 7.12 PATCH `/api/rooms/{roomId}/settlements/{settlementId}/settled`
+
+Header: `X-Participant-Token`（支払側本人）または`X-Host-Key`。両方ある場合は`X-Host-Key`を優先する。
+
+```json
+{ "settled": true }
+```
+
+| 項目 | 内容 |
+| --- | --- |
+| `settled` | 必須の真偽値。`true`で精算済みにする、`false`で取り消す |
+
+- `true`: `settledAt`に現在時刻を入れる。すでに精算済みなら、元の`settledAt`を変えない（200）
+- `false`: `settledAt`をNULLに戻す。すでに未精算なら何も変更しない（200）
+- 成功すると`200 OK`で、精算レスポンス（7.11）を返す。`locked`は変更後の状態を表す
+
+チェックは次の順に行う。
+
+| 順 | 内容 | 失敗時 |
+| --- | --- | --- |
+| 1 | `roomId`、`settlementId`の形式 | 400 `TYPE_MISMATCH` |
+| 2 | 認証（参加者tokenまたはホストキー。別ルームのtoken・キーを含む） | 403 `FORBIDDEN` |
+| 3 | ルームの存在（ホストキーで認証した場合） | 404 `ROOM_NOT_FOUND` |
+| 4 | 入力形式（`settled`が未指定・null） | 400 `VALID_ERROR`。`fields.settled` |
+| 4 | 入力形式（`settled`が真偽値でない） | 400 `TYPE_MISMATCH`。`fields.settled` |
+| 5 | 送金案の存在（別ルームの送金案を含む） | 404 `SETTLEMENT_NOT_FOUND` |
+| 6 | 支払側本人かホストか（受取側、第三者の参加者は不可） | 403 `FORBIDDEN` |
+| 7 | 更新 | 200 |
+
+- 認証（2）は入力形式（4）より先に行う。認証なしで本文も不正なリクエストは403になる。
+- このAPIは精算済みの記録そのものなので、8.4の変更ロック（409）の対象外。
+
+### 7.13 POST `/api/rooms/{roomId}/settlement/reset`
+
+Header: `X-Host-Key`
+
+リクエストボディはない。ルームの全送金案の`settledAt`をNULLに戻し、`200 OK`で精算レスポンス（7.11）を返す。送金案は消さない。精算済みが0件でも200。
+
+チェックは次の順に行う。
+
+| 順 | 内容 | 失敗時 |
+| --- | --- | --- |
+| 1 | `roomId`の形式 | 400 `TYPE_MISMATCH` |
+| 2 | `X-Host-Key`の有無（参加者tokenだけの場合を含む） | 403 `FORBIDDEN` |
+| 3 | ルームの存在 | 404 `ROOM_NOT_FOUND` |
+| 4 | `X-Host-Key`の一致（別ルームのキー、UUIDとして不正なキーを含む） | 403 `FORBIDDEN` |
+| 5 | 全送金案の`settledAt`をNULLに戻す | 200 |
+
+- このAPIは変更ロックを解除する操作なので、8.4の409の対象外。
 
 ## 8. 精算計算
 
@@ -704,8 +784,21 @@ acceptedかつpurchasedで、actualPriceと購入者が入力済みの商品だ�
 - 精算済みが1件以上なら、実購入額、購入者、対象者、再計算を409で拒否する
 - resetは全件のsettledAtをNULLにする
 - reset後に購入情報を変え、recalculateで送金案を置き換えられる
+- 精算済みは送金案ごとに取り消せる（`settled: false`。7.12）。全件が未精算に戻れば、resetと同じくロックが外れる
 
-現行実装差分: 精算済みの記録、reset、409による拒否は未実装（#114）。現在は、再計算はいつでも実行でき、未精算の送金案だけを置き換える。
+精算済みが1件以上あるとき409 `CONFLICT`になるAPI:
+
+| API | 判定の位置 |
+| --- | --- |
+| `PATCH /items/{itemId}`（編集）、`DELETE /items/{itemId}` | 商品の存在（404）と操作権限（403）の後 |
+| `PATCH /items/{itemId}/status`、`PATCH /items/{itemId}/purchased` | 商品の存在（404）の後、商品の状態（400）の前 |
+| `PATCH /items/{itemId}/purchase-detail` | 商品の存在（404）の後、商品の状態（400）の前。クリアも対象 |
+| `PUT /settlement-members` | 入力形式（400）の後、参加者の存在（404）の前 |
+| `POST /settlement/recalculate` | ホストキー（403）の後、精算対象者0人（400）の前 |
+
+409の対象外: 商品の追加（POST `/items`）、一覧、集計、参加者の追加、精算結果の取得、精算済みの変更（7.12）、リセット（7.13）。
+
+409を判定するAPIと、精算済みの変更・リセットは、どれもルームの行をロックしてから判定・更新する。精算済みにする処理と商品の更新が同時に来ても、判定と更新の間に精算済みが割り込まない。
 
 ### 8.5 精算レスポンス例
 
