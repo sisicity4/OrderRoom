@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.github.karuhito.orderroombackend.dto.ByStatus;
 import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
@@ -38,17 +39,21 @@ import com.github.karuhito.orderroombackend.repository.ItemRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
 import com.github.karuhito.orderroombackend.resolver.Operator;
 
+
+
 @Service
 
 public class ItemService {
     private final ParticipantRepository participantRepository;
     private final ItemRepository itemRepository;
     private final RoomRepository roomRepository;
+    private final SettlementLockGuard settlementLockGuard;
 
-    public ItemService(ItemRepository itemRepository, RoomRepository roomRepository, ParticipantRepository participantRepository) {
+    public ItemService(ItemRepository itemRepository, RoomRepository roomRepository, ParticipantRepository participantRepository, SettlementLockGuard settlementLockGuard) {
         this.itemRepository = itemRepository;
         this.roomRepository = roomRepository;
         this.participantRepository = participantRepository;
+        this.settlementLockGuard = settlementLockGuard;
     }
 
     public CreateItemResponse createItem(Participant participant, CreateItemRequest request) {
@@ -83,9 +88,12 @@ public class ItemService {
     }
 
     // ItemListResponseを再利用する
+    @Transactional
     public ItemListResponse updateStatus(UUID roomId, UUID itemId, UpdateItemStatusRequest request) {
+        settlementLockGuard.lockRoom(roomId);
         Item item = itemRepository.findByIdAndRoomId(itemId, roomId)
                 .orElseThrow(() -> new ItemNotFoundException(itemId));
+        settlementLockGuard.ensureNotSettled(roomId);
         item.setStatus(request.status());
         // statusがACCEPTED以外になる場合、Purchasedをfalseにする
         if (!item.getStatus().equals(ItemStatus.ACCEPTED)) {
@@ -110,10 +118,12 @@ public class ItemService {
                 updatedItem.getUpdatedAt());
     }
 
+    @Transactional
     public ItemListResponse updatePurchased(UUID roomId, UUID itemId, UpdateItemPurchasedRequest request) {
+        settlementLockGuard.lockRoom(roomId);
         Item item = itemRepository.findByIdAndRoomId(itemId, roomId)
                 .orElseThrow(() -> new ItemNotFoundException(itemId));
-
+        settlementLockGuard.ensureNotSettled(roomId);
         // StatusがACCEPTED以外かつPurchasedをTrueにしようとしている時はItemStatusInvalidExceptionをthrow
         if (!item.getStatus().equals(ItemStatus.ACCEPTED) && request.purchased()) {
             throw new ItemStatusInvalidException(itemId, item.getStatus());
@@ -231,10 +241,13 @@ public class ItemService {
         return new ItemNameSummary(name, totalQuantity, estimatedTotalPrice);
     }
 
+    @Transactional
     public ItemListResponse updateItem(UUID roomId, UUID itemId, Operator operator, UpdateItemRequest request) {
+        settlementLockGuard.lockRoom(roomId);
         Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
-        
+
         checkOperatorCanModify(item, operator);
+        settlementLockGuard.ensureNotSettled(roomId);
         item.setName(request.name());
         item.setPrice(request.price());
         item.setQuantity(request.quantity());
@@ -263,9 +276,12 @@ public class ItemService {
         );
     }
     
+    @Transactional
     public void deleteItem(UUID roomId, UUID itemId, Operator operator) {
+        settlementLockGuard.lockRoom(roomId);
         Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
         checkOperatorCanModify(item, operator);
+        settlementLockGuard.ensureNotSettled(roomId);
         itemRepository.delete(item);
     }
 
@@ -280,9 +296,12 @@ public class ItemService {
         }
     }
 
+    @Transactional
     public ItemPurchaseDetailResponse updateItemPurchaseDetail(UUID roomId, UUID itemId, UpdateItemPurchaseDetailRequest request) {
+        settlementLockGuard.lockRoom(roomId);
         // 商品を取得
         Item item = itemRepository.findByIdAndRoomId(itemId, roomId).orElseThrow(() -> new ItemNotFoundException(itemId));
+        settlementLockGuard.ensureNotSettled(roomId);
         // 状態を判定する
         InvalidPurchaseDetailStateReason reason = itemDetailCheck(item);
         // 原因なし

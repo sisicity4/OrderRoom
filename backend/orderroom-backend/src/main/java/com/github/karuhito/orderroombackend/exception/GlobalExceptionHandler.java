@@ -145,5 +145,23 @@ public class GlobalExceptionHandler {
             ErrorResponse response = new ErrorResponse("NO_SETTLEMENT_MEMBERS", "精算対象者が0人のため、計算できません", null);
             return ResponseEntity.status(400).body(response);
         }
-        
+
+        @ExceptionHandler(SettlementLockedException.class)
+        public ResponseEntity<ErrorResponse> settlementLockedException(SettlementLockedException ex) {
+            ErrorResponse response = new ErrorResponse("CONFLICT", "精算済みのため、変更できません", null);
+            return ResponseEntity.status(409).body(response);
+        }
+
+        @ExceptionHandler(SettlementNotFoundException.class)
+        public ResponseEntity<ErrorResponse> settlementNotFoundException(SettlementNotFoundException ex) {
+            ErrorResponse response = new ErrorResponse("SETTLEMENT_NOT_FOUND", "送金案が見つかりません", null);
+            return ResponseEntity.status(404).body(response);
+        }
+
+        @ExceptionHandler(NotSettlementPayerException.class)
+        public ResponseEntity<ErrorResponse> notSettlementPayerException(NotSettlementPayerException ex, HttpServletRequest request) {
+            ErrorResponse response = new ErrorResponse("FORBIDDEN", "送金案を操作する権限がありません", null);
+            log.warn("[{} {}] 参加者: {} は送金案: {} を操作する権限がありません", request.getMethod(), request.getRequestURI(), ex.getMessage(), ex.getSettlementId());
+            return ResponseEntity.status(403).body(response);
+        }
 }
