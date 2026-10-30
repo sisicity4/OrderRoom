@@ -29,7 +29,8 @@ public class Participant {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
         name = "room_id",
-        nullable = false
+        nullable = false,
+        columnDefinition = "uuid"
     )
     private Room room;
 
