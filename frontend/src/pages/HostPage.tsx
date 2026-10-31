@@ -58,7 +58,11 @@ function HostPage() {
 
   const fetchItems = async () => {
     try {
-      const res = await fetch(`/api/rooms/${roomId}/items`);
+      const res = await fetch(`/api/rooms/${roomId}/items`, {
+        headers: {
+          'X-Host-Key': hostKey ?? '',
+        },
+      });
       if (!res.ok) {
         setError("提案の取得に失敗しました");
         return;
