@@ -10,8 +10,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Settlement;
@@ -23,6 +25,7 @@ import com.github.karuhito.orderroombackend.repository.SettlementRepository;
 
 /* ルームのロック取得と精算済みの判定（ロックはトランザクション内でしか取れないため、テスト側で張る。テスト後にロールバックする） */
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 @Transactional
 class SettlementLockGuardTest {
     @Autowired SettlementLockGuard guard;

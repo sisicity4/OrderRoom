@@ -13,15 +13,18 @@ import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.repository.ParticipantRepository;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
 
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 class SettlementMemberConcurrencyTest {
     @Autowired SettlementMemberService service;
     @Autowired RoomRepository rooms;
