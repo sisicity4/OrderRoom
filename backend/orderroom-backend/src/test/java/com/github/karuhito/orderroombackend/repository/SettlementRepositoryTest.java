@@ -10,9 +10,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Settlement;
@@ -21,6 +23,7 @@ import jakarta.persistence.EntityManager;
 
 /* settlements テーブルへの保存・取得・置き換え（テスト後にロールバックするので、DBにデータは残らない） */
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 @Transactional
 class SettlementRepositoryTest {
     @Autowired SettlementRepository settlements;

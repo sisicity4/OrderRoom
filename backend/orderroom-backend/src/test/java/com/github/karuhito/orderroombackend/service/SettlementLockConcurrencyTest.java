@@ -12,9 +12,11 @@ import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.dto.UpdateItemStatusRequest;
 import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
@@ -34,6 +36,7 @@ import com.github.karuhito.orderroombackend.resolver.OperatorType;
  * スレッドごとに別のトランザクションでコミットするため、テスト後にロールバックしない（データは開発用DBに残る）
  */
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 class SettlementLockConcurrencyTest {
     @Autowired SettlementService settlementService;
     @Autowired ItemService itemService;
