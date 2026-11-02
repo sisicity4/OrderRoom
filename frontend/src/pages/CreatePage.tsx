@@ -38,6 +38,7 @@ function CreatePage() {
   }
   return (
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
+      <button className='border px-3 py-2 w-fit text-sm text-[#7A6B57] cursor-pointer' onClick={() => navigate('/')}>← トップへ</button>
       <h3 className='tracking-[1.6em] text-[#7A6B57]'>開店</h3>
       <p className='tracking-[0.5em] text-[#7A6B57]'>るーむさくせい</p>
       <h1 className='text-[clamp(2rem,8vw,3rem)] font-bold'>ルーム作成</h1>
