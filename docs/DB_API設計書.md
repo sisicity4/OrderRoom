@@ -225,7 +225,9 @@ stateDiagram-v2
 | 入力不正 | 400 |
 | 権限不足 | 403 |
 | 不存在 | 404 |
+| メソッド不一致 | 405 |
 | 状態競合 | 409 |
+| Content-Type不正 | 415 |
 
 エラーレスポンスは、現在の `ErrorResponse` に合わせて次の形へ統一する。
 
@@ -245,7 +247,7 @@ stateDiagram-v2
 
 | HTTP | `error` | 状態 | 用途 |
 | --- | --- | --- | --- |
-| 400 | `VALID_ERROR` | 実装済み | Bean Validation失敗 |
+| 400 | `VALID_ERROR` | 実装済み | Bean Validation失敗。または、必須のクエリパラメータの省略（`fields` にパラメータ名と「必須です」。2026-11-02時点で必須のクエリパラメータを持つAPIは無い） |
 | 400 | `INVALID_ITEM_STATE` | 実装済み | accepted以外の商品をpurchased=trueにしようとした。または、accepted かつ purchased=true でない商品に、購入詳細（実購入額・購入者）を登録しようとした |
 | 400 | `TYPE_MISMATCH` | 実装済み | roomIdなどの型不正 |
 | 400 | `NO_SETTLEMENT_MEMBERS` | 実装済み | 精算対象者が0人のため再計算できない（`POST /settlement/recalculate`）。`GET /settlement`は同じ状態でも400にせず、200で`members`と`transfers`を空で返す |
@@ -254,8 +256,11 @@ stateDiagram-v2
 | 404 | `PARTICIPANT_NOT_FOUND` | 実装済み | 参加者不存在、または別ルームの参加者 |
 | 404 | `ITEM_NOT_FOUND` | 実装済み | 商品不存在 |
 | 404 | `SETTLEMENT_NOT_FOUND` | 実装済み | 送金案不存在、または別ルームの送金案（`PATCH /settlements/{settlementId}/settled`） |
+| 404 | `NOT_FOUND` | 実装済み | 存在しないパスへのリクエスト（`GET /api/not-exists` など）。データの不存在には、上の `*_NOT_FOUND` を使う |
+| 405 | `METHOD_NOT_ALLOWED` | 実装済み | パスに定義されていないHTTPメソッドで呼んだ（POST専用のAPIをPUTで呼ぶなど）。`Allow` ヘッダで使えるメソッドを返す |
 | 409 | `CONFLICT` | 実装済み | 精算済みの送金案が1件以上あるルームで、変更がロックされている操作を行った（8.4） |
-| 500 | `INTERNAL_ERROR` | 実装済み | 想定外のサーバー内部エラー（DBとの接続が切れた場合など） |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | 実装済み | JSONを受け取るAPIに、`application/json` 以外の `Content-Type` で送った |
+| 500 | `INTERNAL_ERROR` | 実装済み | 想定外のサーバー内部エラー（DBとの接続が切れた場合など）。メソッド違い・存在しないパスなどのクライアント起因のエラーは含まない（上の405・404・415で返す） |
 
 ### 5.2 バリデーション
 
