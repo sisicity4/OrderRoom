@@ -32,6 +32,10 @@ function RoomPage() {
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState('')
+  const [editName, setEditName] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
+  const [sheetError, setSheetError] = useState('');
   const [title, setTitle] = useState('');
   const [budgetAmount, setBudgetAmount] = useState<number | null>(null);
 
@@ -91,7 +95,24 @@ function RoomPage() {
     }
   };
 
-  const saveMemo = async (item: Proposal) => {
+  const openSheet = (item: Proposal) => {
+    setSelectedId(item.id);
+    setEditName(item.name);
+    setEditPrice(String(item.price));
+    setEditQuantity(String(item.quantity));
+    setMemoText(item.memo ?? '');
+    setSheetError('');
+  };
+
+  const saveItem = async (item: Proposal) => {
+    if (editName === '' || editPrice === '' || editQuantity === '') {
+      setSheetError("入力欄をすべて入れてください。");
+      return;
+    }
+    if (isNaN(Number(editPrice)) || isNaN(Number(editQuantity))) {
+      setSheetError("値段と個数は数字で入れてください。");
+      return;
+    }
     try {
       const res = await fetch(`/api/rooms/${roomId}/items/${item.id}`, {
         method: 'PATCH',
@@ -100,21 +121,20 @@ function RoomPage() {
           'X-Participant-Token': token ?? '',
         },
         body: JSON.stringify({
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
+          name: editName,
+          price: Number(editPrice),
+          quantity: Number(editQuantity),
           memo: memoText,
         }),
       });
       if (!res.ok) {
-        setError("メモの保存に失敗しました。");
+        setSheetError("提案の保存に失敗しました。");
         return;
       }
       await fetchItems();
       setSelectedId(null);
-      setError('');
     } catch {
-      setError("通信に失敗しました。");
+      setSheetError("通信に失敗しました。");
     }
   };
 
@@ -168,10 +188,7 @@ function RoomPage() {
         {list.map((item) => (
           <li className={`border border-dashed p-3 flex gap-2 cursor-pointer ${item.status === 'rejected' ? 'opacity-60' : ''}`}
             key={item.id}
-            onClick={() => {
-              setSelectedId(item.id);
-              setMemoText(item.memo ?? '');
-            }}>
+            onClick={() => openSheet(item)}>
             <div className='flex flex-col min-w-0'>
               <p className='break-all'>{item.name + " "}{item.price + "円 "}{item.quantity + "個"}</p>
               <p className='text-sm text-[#7A6B57] break-all'>提案者: {item.participantName}</p>
@@ -268,12 +285,40 @@ function RoomPage() {
       {selected !== null && (
         <div className='fixed inset-0 bg-black/40 flex items-end'
           onClick={() => setSelectedId(null)}>
-          <div className='bg-[#f0e5cc] w-full rounded-t-2xl p-6 flex flex-col gap-3'
+          <div className='bg-[#f0e5cc] w-full rounded-t-2xl p-6 flex flex-col gap-3 max-h-[90vh] overflow-y-auto'
             onClick={(e) => e.stopPropagation()}>
-            <p className='border w-fit px-2'>メモ</p>
-            <h2 className='text-xl font-bold break-all'>{selected.name}</h2>
+            <p className='border w-fit px-2'>提案の詳細</p>
             {selected.participantId === participantId ? (
               <>
+                <div className='flex'>
+                  <p className='border px-2 shrink-0'>品名</p>
+                  <input
+                    className='border-b-2 border-neutral-700 ml-1.5 outline-none w-full min-w-0 bg-transparent'
+                    type='text'
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)} />
+                </div>
+                <div className='flex'>
+                  <p className='border px-2 shrink-0'>値段</p>
+                  <input
+                    className='border-b-2 border-neutral-700 ml-1.5 outline-none w-full min-w-0 bg-transparent'
+                    type='text'
+                    inputMode='numeric'
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)} />
+                  <p className='ml-1 shrink-0'>円</p>
+                </div>
+                <div className='flex'>
+                  <p className='border px-2 shrink-0'>個数</p>
+                  <input
+                    className='border-b-2 border-neutral-700 ml-1.5 outline-none w-full min-w-0 bg-transparent'
+                    type='text'
+                    inputMode='numeric'
+                    value={editQuantity}
+                    onChange={(e) => setEditQuantity(e.target.value)} />
+                  <p className='ml-1 shrink-0'>個</p>
+                </div>
+                <p className='border w-fit px-2'>メモ</p>
                 <textarea
                   className='border border-dashed outline-none p-2 h-32'
                   value={memoText}
@@ -282,13 +327,17 @@ function RoomPage() {
                 {selected.status === 'accepted' && (
                   <p className='text-sm text-[#7A6B57]'>採用済みの提案を変更すると「提案中」に戻ります。</p>
                 )}
+                {sheetError && <p className='text-red-700'>{sheetError}</p>}
                 <div className='flex gap-4'>
-                  <button onClick={() => saveMemo(selected)}>保存</button>
+                  <button onClick={() => saveItem(selected)}>保存</button>
                   <button onClick={() => setSelectedId(null)}>閉じる</button>
                 </div>
               </>
             ) : (
               <>
+                <h2 className='text-xl font-bold break-all'>{selected.name}</h2>
+                <p>{selected.price}円 × {selected.quantity}個</p>
+                <p className='border w-fit px-2'>メモ</p>
                 <p className='border-y border-dashed p-2 min-h-16 whitespace-pre-wrap break-all'>
                   {selected.memo ? selected.memo : 'メモはありません。'}
                 </p>
