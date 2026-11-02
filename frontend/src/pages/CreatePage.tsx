@@ -17,6 +17,10 @@ function CreatePage() {
       setError('ルーム名を入力してください。');
       return;
     }
+    if (budgetAmount !== '' && (!Number.isInteger(Number(budgetAmount)) || Number(budgetAmount) < 0)) {
+      setError('予算は0以上の数字で入れてください。');
+      return;
+    }
     const res = await fetch('/api/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -24,6 +28,7 @@ function CreatePage() {
         title,
         eventDate: eventDate === '' ? null : eventDate,
         memo,
+        budgetAmount: budgetAmount === '' ? null : Number(budgetAmount),
       }),
     });
     if (!res.ok) {
@@ -35,6 +40,7 @@ function CreatePage() {
     setId(data.id);
     setParticipantUrl(data.participantUrl);
     setHostKey(data.hostKey);
+    setError('');
   }
   return (
     <div className='flex flex-col min-h-screen bg-[#f0e5cc] gap-4 p-8'>
