@@ -12,9 +12,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.servlet.HandlerMapping;
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.entity.Room;
 
 import com.github.karuhito.orderroombackend.exception.InvalidHostKeyException;
@@ -27,6 +29,7 @@ import com.github.karuhito.orderroombackend.repository.RoomRepository;
 
 
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 public class HostKeyInterceptorTest {
     @Autowired
     private RoomRepository roomRepository;

@@ -80,10 +80,12 @@
 
 - Java 21
 - Neon（PostgreSQL）の接続情報（`DB_URL` / `DB_USER` / `DB_PASSWORD`）
+- Docker Desktop（テストを実行するときだけ必要）
 
 ### 1. 接続情報の設定（.env）
 
 `backend/orderroom-backend/.env` を作成し、Neonの接続情報を記述します（`.env` はGit管理外）。
+`.env` はアプリを起動するときだけ使います。テストでは使いません。
 値はクォートで囲まず、`export` も不要です（アプリ起動時に自動で読み込まれます）。
 
 ```dotenv
@@ -117,5 +119,20 @@ curl -i http://localhost:8080/api/health
 ```
 
 `{"status":"OK"}` が返れば正常です。
+
+### 4. テストの実行
+
+テストは、Testcontainers が Docker で起動する PostgreSQL（`postgres:18.6`、Neon と同じバージョン）を使います。
+`.env` は不要で、Neon には接続しません。コンテナはテストの終了後に自動で削除されます。
+
+1. Docker Desktop を起動しておきます。
+2. テストを実行します。
+
+```bash
+cd backend/orderroom-backend
+./mvnw clean test
+```
+
+Docker が起動していないと、`Could not find a valid Docker environment` というエラーでテストが失敗します。
 
 ---

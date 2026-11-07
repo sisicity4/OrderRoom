@@ -10,7 +10,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.entity.Participant;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.entity.Settlement;
@@ -23,6 +25,7 @@ import com.github.karuhito.orderroombackend.repository.SettlementMemberRepositor
 import com.github.karuhito.orderroombackend.repository.SettlementRepository;
 
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 class SettlementMemberServiceTest {
     @Autowired SettlementMemberService service;
     @Autowired RoomRepository rooms;

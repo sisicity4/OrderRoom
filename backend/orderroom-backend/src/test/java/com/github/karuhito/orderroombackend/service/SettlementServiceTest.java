@@ -12,9 +12,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.dto.SettlementResponse;
 import com.github.karuhito.orderroombackend.dto.SettlementResponse.IncompletePurchaseItem;
 import com.github.karuhito.orderroombackend.dto.SettlementResponse.MemberSummary;
@@ -40,6 +42,7 @@ import jakarta.persistence.EntityManager;
 
 /* 精算計算のServiceを、実際のDBで確認する（テスト後にロールバックするので、DBにデータは残らない） */
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 @Transactional
 class SettlementServiceTest {
     private static final Instant BASE = Instant.parse("2026-01-01T00:00:00Z");

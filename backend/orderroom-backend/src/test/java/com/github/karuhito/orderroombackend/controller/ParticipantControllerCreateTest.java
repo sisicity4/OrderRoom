@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.UUID;
 
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +18,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 
 
+import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
 import com.github.karuhito.orderroombackend.dto.CreateParticipantRequest;
 import com.github.karuhito.orderroombackend.entity.Room;
 import com.github.karuhito.orderroombackend.repository.RoomRepository;
@@ -24,6 +26,7 @@ import com.github.karuhito.orderroombackend.repository.RoomRepository;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 @AutoConfigureMockMvc
 
 public class ParticipantControllerCreateTest {
