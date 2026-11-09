@@ -222,7 +222,9 @@ function HostPage() {
           <div className='flex flex-col'>
             <p className='border px-2 w-fit mb-1'>品目別</p>
             {summary.itemQuantities.length === 0 && (
-              <p className='text-[#7A6B57]'>まだ提案がありません。</p>
+              <p className='text-[#7A6B57]'>
+                {summary.byStatus.rejected > 0 ? '見送り以外の提案がありません。' : 'まだ提案がありません。'}
+              </p>
             )}
             {summary.itemQuantities.map((q) => (
               <div className='flex gap-2 border-b border-dashed border-neutral-700 py-1' key={q.name}>
@@ -233,10 +235,10 @@ function HostPage() {
             ))}
             <p className='text-sm text-[#7A6B57] mt-1'>見送りを除いた提案中・採用の合計</p>
           </div>
+
+          <hr className='border-t-5' />
         </div>
       )}
-
-      <hr className='border-t-5' />
 
       <div className='flex flex-wrap gap-2'>
         {filters.map((f) => (
