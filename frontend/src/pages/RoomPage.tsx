@@ -126,6 +126,7 @@ function RoomPage() {
   if (!token) {
     return (
       <div className='bg-[#f0e5cc] min-h-screen flex flex-col gap-4 p-8'>
+        <button className='border px-3 py-2 w-fit text-sm text-[#7A6B57] cursor-pointer' onClick={() => navigate('/')}>← トップへ</button>
         <p>このルームにまだ参加していません。</p>
         <button className='border px-4 py-2 w-fit' onClick={() => navigate('/join')}>
           参加画面へ
@@ -137,6 +138,7 @@ function RoomPage() {
 
   return (
     <div className='bg-[#f0e5cc] min-h-screen flex flex-col gap-4 p-8'>
+      <button className='border px-3 py-2 w-fit text-sm text-[#7A6B57] cursor-pointer' onClick={() => navigate('/')}>← トップへ</button>
       <p className='tracking-[0.5em] text-[#7A6B57]'>おしながき</p>
       <p className='tracking-[1.0em] text-[#7A6B57]'>ルーム名</p>
       <h1 className='text-[clamp(1.75rem,7vw,2.5rem)] font-bold break-all'>{title}</h1>

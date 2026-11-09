@@ -35,6 +35,7 @@ function JoinPage() {
   }
   return (
     <div className='flex flex-col gap-4 p-8 bg-[#f0e5cc] min-h-screen'>
+      <button className='border px-3 py-2 w-fit text-sm text-[#7A6B57] cursor-pointer' onClick={() => navigate('/')}>← トップへ</button>
       <p className='text-[#7A6B57] tracking-[1em]'>相席</p>
       <p className='text-[#7A6B57] tracking-[1em]'>るーむさんか</p>
       <h1 className='text-[clamp(1.75rem,7vw,2.5rem)] font-bold'>ルーム参加</h1>
