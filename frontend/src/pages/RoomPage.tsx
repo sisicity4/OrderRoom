@@ -24,6 +24,16 @@ const statusColor: Record<string, string> = {
   rejected: 'text-neutral-500 border-neutral-500',
 };
 
+const validateItem = (name: string, price: string, quantity: string) => {
+  if (name.trim() === '' || price.trim() === '' || quantity.trim() === '') {
+    return "入力欄をすべて入れてください。";
+  }
+  if (!Number.isInteger(Number(price)) || !Number.isInteger(Number(quantity))) {
+    return "値段と個数は整数で入れてください。";
+  }
+  return '';
+};
+
 function RoomPage() {
   const [name, setName] = useState('');
   const [list, setList] = useState<Proposal[]>([]);
@@ -36,6 +46,7 @@ function RoomPage() {
   const [editPrice, setEditPrice] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
   const [sheetError, setSheetError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
   const [budgetAmount, setBudgetAmount] = useState<number | null>(null);
 
@@ -105,14 +116,20 @@ function RoomPage() {
   };
 
   const saveItem = async (item: Proposal) => {
-    if (editName === '' || editPrice === '' || editQuantity === '') {
-      setSheetError("入力欄をすべて入れてください。");
+    if (saving) return;
+    const message = validateItem(editName, editPrice, editQuantity);
+    if (message !== '') {
+      setSheetError(message);
       return;
     }
-    if (isNaN(Number(editPrice)) || isNaN(Number(editQuantity))) {
-      setSheetError("値段と個数は数字で入れてください。");
+    const newName = editName.trim();
+    const newPrice = Number(editPrice);
+    const newQuantity = Number(editQuantity);
+    if (newName === item.name && newPrice === item.price && newQuantity === item.quantity && memoText === (item.memo ?? '')) {
+      setSelectedId(null);
       return;
     }
+    setSaving(true);
     try {
       const res = await fetch(`/api/rooms/${roomId}/items/${item.id}`, {
         method: 'PATCH',
@@ -121,9 +138,9 @@ function RoomPage() {
           'X-Participant-Token': token ?? '',
         },
         body: JSON.stringify({
-          name: editName,
-          price: Number(editPrice),
-          quantity: Number(editQuantity),
+          name: newName,
+          price: newPrice,
+          quantity: newQuantity,
           memo: memoText,
         }),
       });
@@ -135,6 +152,8 @@ function RoomPage() {
       setSelectedId(null);
     } catch {
       setSheetError("通信に失敗しました。");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -246,12 +265,9 @@ function RoomPage() {
       {error && <p className='text-red-700'>{error}</p>}
 
       <button onClick={async () => {
-        if (name === '' || price === '' || quantity === '') {
-          setError("入力欄をすべて入れてください。");
-          return;
-        }
-        if (isNaN(Number(price)) || isNaN(Number(quantity))) {
-          setError("値段と個数は数字で入れてください。");
+        const message = validateItem(name, price, quantity);
+        if (message !== '') {
+          setError(message);
           return;
         }
         try {
@@ -262,7 +278,7 @@ function RoomPage() {
               'X-Participant-Token': token,
             },
             body: JSON.stringify({
-              name,
+              name: name.trim(),
               price: Number(price),
               quantity: Number(quantity),
               memo: '',
@@ -325,11 +341,17 @@ function RoomPage() {
                   placeholder='メモを記入'
                   onChange={(e) => setMemoText(e.target.value)} />
                 {selected.status === 'accepted' && (
-                  <p className='text-sm text-[#7A6B57]'>採用済みの提案を変更すると「提案中」に戻ります。</p>
+                  <p className='text-sm text-[#7A6B57]'>
+                    採用済みの提案を変更すると「提案中」に戻ります。
+                    {selected.purchased && '購入済みと購入情報も解除されます。'}
+                  </p>
                 )}
                 {sheetError && <p className='text-red-700'>{sheetError}</p>}
                 <div className='flex gap-4'>
-                  <button onClick={() => saveItem(selected)}>保存</button>
+                  <button
+                    className='disabled:opacity-40'
+                    disabled={saving}
+                    onClick={() => saveItem(selected)}>{saving ? '保存中…' : '保存'}</button>
                   <button onClick={() => setSelectedId(null)}>閉じる</button>
                 </div>
               </>
