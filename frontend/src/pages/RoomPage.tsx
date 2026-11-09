@@ -60,7 +60,11 @@ function RoomPage() {
 
   const fetchItems = async () => {
     try {
-      const res = await fetch(`/api/rooms/${roomId}/items`);
+      const res = await fetch(`/api/rooms/${roomId}/items`, {
+        headers: {
+          'X-Participant-Token': token ?? '',
+        },
+      });
       if (!res.ok) {
         setError("提案の取得に失敗しました。");
         return;
