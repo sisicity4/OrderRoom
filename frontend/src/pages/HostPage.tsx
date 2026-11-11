@@ -12,6 +12,17 @@ type Proposal = {
   purchased: boolean;
 };
 
+type Summary = {
+  acceptedTotalPrice: number;
+  proposedTotalPrice: number;
+  budgetAmount: number | null;
+  remainingBudget: number | null;
+  overBudgetAmount: number | null;
+  byStatus: { proposed: number; accepted: number; rejected: number };
+  perParticipant: { participantId: string; name: string; proposalCount: number; acceptedTotalPrice: number }[];
+  itemQuantities: { name: string; totalQuantity: number; estimatedTotalPrice: number }[];
+};
+
 const statusLabel: Record<string, string> = {
   proposed: '提案中',
   accepted: '採用',
@@ -39,6 +50,7 @@ function HostPage() {
   const [error, setError] = useState('');
   const [title, setTitle] = useState('');
   const [filter, setFilter] = useState('all');
+  const [summary, setSummary] = useState<Summary | null>(null);
 
   const shownList = filter === 'all' ? list : list.filter((item) => item.status === filter);
 
@@ -74,6 +86,24 @@ function HostPage() {
     }
   }
 
+  const fetchSummary = async () => {
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/summary`, {
+        headers: {
+          'X-Host-Key': hostKey ?? '',
+        },
+      });
+      if (!res.ok) {
+        setError("集計の取得に失敗しました");
+        return;
+      }
+      const data = await res.json();
+      setSummary(data);
+    } catch {
+      setError("通信に失敗しました");
+    }
+  }
+
   const updateStatus = async (itemId: string, status: string) => {
     try {
       const res = await fetch(`/api/rooms/${roomId}/items/${itemId}/status`, {
@@ -89,6 +119,7 @@ function HostPage() {
         return;
       }
       fetchItems();
+      fetchSummary();
     } catch {
       setError("通信に失敗しました");
     }
@@ -117,6 +148,7 @@ function HostPage() {
   useEffect(() => {
     fetchRoom();
     fetchItems();
+    fetchSummary();
   }, [roomId]);
 
   if (!hostKey) {
@@ -138,6 +170,79 @@ function HostPage() {
       </div>
 
       <hr className='border-t-5' />
+
+      {summary && (
+        <div className='flex flex-col gap-4'>
+          <p className='border px-2 w-fit'>勘定</p>
+
+          <div className='flex flex-col'>
+            <div className='flex border-b border-dashed border-neutral-700 py-1'>
+              <p className='shrink-0'>採用の合計</p>
+              <p className='ml-auto tracking-[0.2em] font-bold'>{summary.acceptedTotalPrice}円</p>
+            </div>
+            <div className='flex border-b border-dashed border-neutral-700 py-1 text-[#7A6B57]'>
+              <p className='shrink-0'>提案中の合計</p>
+              <p className='ml-auto tracking-[0.2em]'>{summary.proposedTotalPrice}円</p>
+            </div>
+            <div className='flex border-b border-dashed border-neutral-700 py-1'>
+              <p className='shrink-0'>予算</p>
+              <p className='ml-auto tracking-[0.2em]'>
+                {summary.budgetAmount === null ? '未設定' : `${summary.budgetAmount}円`}
+              </p>
+            </div>
+            {summary.budgetAmount !== null && (
+              summary.overBudgetAmount !== null && summary.overBudgetAmount > 0 ? (
+                <div className='flex border-b border-dashed border-neutral-700 py-1 text-red-700 font-bold'>
+                  <p className='shrink-0'>予算超過</p>
+                  <p className='ml-auto tracking-[0.2em]'>{summary.overBudgetAmount}円</p>
+                </div>
+              ) : (
+                <div className='flex border-b border-dashed border-neutral-700 py-1'>
+                  <p className='shrink-0'>残り</p>
+                  <p className='ml-auto tracking-[0.2em]'>{summary.remainingBudget}円</p>
+                </div>
+              )
+            )}
+            <p className='text-sm text-[#7A6B57] mt-1'>
+              提案中 {summary.byStatus.proposed}件 / 採用 {summary.byStatus.accepted}件 / 見送り {summary.byStatus.rejected}件
+            </p>
+          </div>
+
+          <div className='flex flex-col'>
+            <p className='border px-2 w-fit mb-1'>人別</p>
+            {summary.perParticipant.length === 0 && (
+              <p className='text-[#7A6B57]'>まだ提案がありません。</p>
+            )}
+            {summary.perParticipant.map((p) => (
+              <div className='flex gap-2 border-b border-dashed border-neutral-700 py-1' key={p.participantId}>
+                <p className='min-w-0 break-all'>{p.name}</p>
+                <p className='text-sm text-[#7A6B57] shrink-0 self-center'>{p.proposalCount}件</p>
+                <p className='ml-auto shrink-0 tracking-[0.2em]'>{p.acceptedTotalPrice}円</p>
+              </div>
+            ))}
+            <p className='text-sm text-[#7A6B57] mt-1'>金額は採用分のみ</p>
+          </div>
+
+          <div className='flex flex-col'>
+            <p className='border px-2 w-fit mb-1'>品目別</p>
+            {summary.itemQuantities.length === 0 && (
+              <p className='text-[#7A6B57]'>
+                {summary.byStatus.rejected > 0 ? '見送り以外の提案がありません。' : 'まだ提案がありません。'}
+              </p>
+            )}
+            {summary.itemQuantities.map((q) => (
+              <div className='flex gap-2 border-b border-dashed border-neutral-700 py-1' key={q.name}>
+                <p className='min-w-0 break-all'>{q.name}</p>
+                <p className='text-sm text-[#7A6B57] shrink-0 self-center'>{q.totalQuantity}個</p>
+                <p className='ml-auto shrink-0 tracking-[0.2em]'>{q.estimatedTotalPrice}円</p>
+              </div>
+            ))}
+            <p className='text-sm text-[#7A6B57] mt-1'>見送りを除いた提案中・採用の合計</p>
+          </div>
+
+          <hr className='border-t-5' />
+        </div>
+      )}
 
       <div className='flex flex-wrap gap-2'>
         {filters.map((f) => (
