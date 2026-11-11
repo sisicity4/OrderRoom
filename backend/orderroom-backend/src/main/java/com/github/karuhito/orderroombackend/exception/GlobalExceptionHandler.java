@@ -4,14 +4,20 @@ package com.github.karuhito.orderroombackend.exception;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.github.karuhito.orderroombackend.dto.ErrorResponse;
 
@@ -30,7 +36,6 @@ public class GlobalExceptionHandler {
             for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
                 fieldsMap.put(fieldError.getField(), fieldError.getDefaultMessage());
             }
-
             ErrorResponse response = new ErrorResponse("VALID_ERROR", "不正な入力です", fieldsMap);
             return ResponseEntity.status(400).body(response);
         }
@@ -114,6 +119,41 @@ public class GlobalExceptionHandler {
         @ExceptionHandler(InvalidPathVariableException.class)
         public ResponseEntity<ErrorResponse> invalidPathVariableException(InvalidPathVariableException ex) {
             return createTypeMismatchResponse(ex.getFieldName(), ex.getInvalidValue());
+        }
+
+        @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+        public ResponseEntity<ErrorResponse> handleRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+            ErrorResponse response = new ErrorResponse("METHOD_NOT_ALLOWED", "このHTTPメソッドは使えません", null);
+            Set<HttpMethod> allowMethods = ex.getSupportedHttpMethods();
+            log.warn("[{} {}] 定義されていないHTTPメソッドです", request.getMethod(), request.getRequestURI());
+            if (allowMethods == null) {
+                return  ResponseEntity.status(405).body(response);
+            }
+            HttpMethod[] httpMethods = allowMethods.toArray(new HttpMethod[0]);
+            return ResponseEntity.status(405).allow(httpMethods).body(response);
+        }
+
+        @ExceptionHandler(NoResourceFoundException.class)
+        public ResponseEntity<ErrorResponse> handleNoResourceFoundException(NoResourceFoundException ex, HttpServletRequest request) {
+            ErrorResponse response = new ErrorResponse("NOT_FOUND", "APIが見つかりません", null);
+            log.warn("[{} {}] 存在しないパスです", request.getMethod(), request.getRequestURI());
+            return ResponseEntity.status(404).body(response);
+        }
+
+        @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+        public ResponseEntity<ErrorResponse> handleMediaTypeNotSupportedException(HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+            ErrorResponse response = new ErrorResponse("UNSUPPORTED_MEDIA_TYPE", "Content-Typeが不正です", null);
+            log.warn("[{} {}] 対応していないContent-Type: {} です", request.getMethod(), request.getRequestURI(), request.getContentType());
+            return ResponseEntity.status(415).body(response);
+        }
+
+        @ExceptionHandler(MissingServletRequestParameterException.class)
+        public ResponseEntity<ErrorResponse> handleMissingServletRequestParameterException(MissingServletRequestParameterException ex, HttpServletRequest request) {
+            String parameterName = ex.getParameterName();
+            Map<String, String> fieldsMap = Map.of(parameterName, "必須です");
+            ErrorResponse response = new ErrorResponse("VALID_ERROR", "不正な入力です", fieldsMap);
+            log.warn("[{} {}] 必須のパラメータがありません: {}", request.getMethod(), request.getRequestURI(), parameterName);
+            return ResponseEntity.status(400).body(response);
         }
 
         @ExceptionHandler(Exception.class)

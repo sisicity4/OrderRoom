@@ -4,11 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 
 
 import com.github.karuhito.orderroombackend.dto.ErrorResponse;
@@ -140,5 +142,18 @@ public class GlobalExceptionHandlerTest {
 
         assertEquals(participantId.toString(), ex.getMessage());
         assertEquals(settlementId, ex.getSettlementId());
+    }
+
+    @Test // 必須の @RequestParam を省略したとき、400と VALID_ERROR を返し、fields にパラメータ名を入れる（#120。今のAPIでは発生しないので、ハンドラを直接呼ぶ）
+    void missingServletRequestParameterTest() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/rooms/test/items");
+        MissingServletRequestParameterException ex = new MissingServletRequestParameterException("status", "String");
+        ResponseEntity<ErrorResponse> response = handler.handleMissingServletRequestParameterException(ex, request);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("VALID_ERROR", response.getBody().error());
+        assertEquals("不正な入力です", response.getBody().message());
+        assertEquals(Map.of("status", "必須です"), response.getBody().fields());
     }
 }
