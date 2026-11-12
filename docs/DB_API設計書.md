@@ -525,7 +525,7 @@ statusは次の3値を受け付ける。
 { "purchased": true }
 ```
 
-accepted以外の商品をpurchased=trueにする要求は400 `INVALID_ITEM_STATE` とする。
+accepted以外の商品をpurchased=trueにする要求は400 `INVALID_ITEM_STATE` とする。accepted以外の商品へのpurchased=falseは、状態が変わらないため200で受ける（Discussion #93 の案A）。
 
 purchasedをfalseへ戻した場合はactualPriceとpaidByParticipantIdをNULLへ戻す。精算済みがある場合は変更を409で拒否する。
 
