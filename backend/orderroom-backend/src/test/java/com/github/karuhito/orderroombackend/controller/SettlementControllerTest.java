@@ -335,6 +335,25 @@ class SettlementControllerTest {
             .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"));
     }
 
+    @Test // 取得はルームの存在を認証より先に確かめる（#101）。ヘッダの種類や有無に関係なく404
+    void getForUnknownRoomIsNotFoundRegardlessOfHeaders() throws Exception {
+        UUID unknownRoomId = UUID.randomUUID();
+
+        // 存在しない参加者 token
+        mvc.perform(get(SETTLEMENT_PATH, unknownRoomId)
+                .header("X-Participant-Token", UUID.randomUUID().toString()))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"));
+        // ヘッダなし
+        mvc.perform(get(SETTLEMENT_PATH, unknownRoomId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"));
+        // UUID として不正なホストキー
+        mvc.perform(get(SETTLEMENT_PATH, unknownRoomId).header("X-Host-Key", "not-a-uuid"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value("ROOM_NOT_FOUND"));
+    }
+
     @Test
     void recalculateWithAnySettledIsConflictAndKeepsTransfers() throws Exception {
         Settlement settled = new Settlement(room, b, a, 1000);
