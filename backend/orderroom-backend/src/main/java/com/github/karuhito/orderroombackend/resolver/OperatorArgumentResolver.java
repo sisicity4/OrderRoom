@@ -55,6 +55,7 @@ public class OperatorArgumentResolver implements HandlerMethodArgumentResolver {
             Map<String, String> map = (Map<String, String>) attribute;
 
             UUID roomId = RoomIdParser.roomIdParse(map.get("roomId"));
+            Room room = roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
 
             // X-Host-Key ヘッダを読み込む
             String hostKeyString = webRequest.getHeader("X-Host-Key");
@@ -67,7 +68,6 @@ public class OperatorArgumentResolver implements HandlerMethodArgumentResolver {
                 } catch (IllegalArgumentException e) {
                     throw new InvalidHostKeyException(roomId, InvalidHostKeyReason.MISMATCH);
                 }
-                Room room = roomRepository.findById(roomId).orElseThrow(() -> new RoomNotFoundException(roomId));
                 if (!room.getHostKey().equals(hostKeyUuid)) {
                     throw new InvalidHostKeyException(roomId, InvalidHostKeyReason.MISMATCH);
                 }

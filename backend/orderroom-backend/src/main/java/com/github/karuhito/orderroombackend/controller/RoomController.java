@@ -7,6 +7,8 @@ import com.github.karuhito.orderroombackend.dto.CreateRoomRequest;
 import com.github.karuhito.orderroombackend.dto.CreateRoomResponse;
 import com.github.karuhito.orderroombackend.dto.ItemSummaryResponse;
 import com.github.karuhito.orderroombackend.dto.RoomResponse;
+import com.github.karuhito.orderroombackend.resolver.CurrentOperator;
+import com.github.karuhito.orderroombackend.resolver.Operator;
 import com.github.karuhito.orderroombackend.service.ItemService;
 import com.github.karuhito.orderroombackend.service.RoomService;
 
@@ -43,7 +45,7 @@ public class RoomController {
     }
 
     @GetMapping("/{roomId}/summary")
-    public ResponseEntity<ItemSummaryResponse> getItemSummary(@PathVariable UUID roomId) {
+    public ResponseEntity<ItemSummaryResponse> getItemSummary(@PathVariable UUID roomId, @CurrentOperator Operator operator) {
         ItemSummaryResponse response = itemService.getItemSummary(roomId);
         return ResponseEntity.status(200).body(response);
     }
