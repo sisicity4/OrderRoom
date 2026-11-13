@@ -49,6 +49,7 @@ public class ParticipantControllerGetTest {
         
         mockMvc.perform(
             get("/api/rooms/{roomId}/participants", roomId)
+                .header("X-Host-Key", room.getHostKey().toString())
                 .contentType(MediaType.APPLICATION_JSON)
         )
         .andExpect(status().isOk())
@@ -83,6 +84,7 @@ public class ParticipantControllerGetTest {
 
         mockMvc.perform(
             get("/api/rooms/{roomId}/participants", roomId)
+                .header("X-Host-Key", room.getHostKey().toString())
         )
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isEmpty());

@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.github.karuhito.orderroombackend.dto.CreateParticipantRequest;
 import com.github.karuhito.orderroombackend.dto.CreateParticipantResponse;
 import com.github.karuhito.orderroombackend.dto.ParticipantListResponse;
+import com.github.karuhito.orderroombackend.resolver.CurrentOperator;
+import com.github.karuhito.orderroombackend.resolver.Operator;
 import com.github.karuhito.orderroombackend.service.ParticipantService;
 
 import jakarta.validation.Valid;
@@ -37,7 +39,7 @@ public class ParticipantController {
     }
 
     @GetMapping // ルームの参加者を一覧で取得
-    public ResponseEntity<List<ParticipantListResponse>> getParticipants(@PathVariable UUID roomId) {
+    public ResponseEntity<List<ParticipantListResponse>> getParticipants(@PathVariable UUID roomId, @CurrentOperator Operator operator) {
         List<ParticipantListResponse> responses = participantService.getParticipants(roomId);
 
         return ResponseEntity.status(200).body(responses);
