@@ -63,6 +63,7 @@ public class ItemControllerGetTest {
         itemRepository.save(item2);
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room.getHostKey().toString())
             .contentType(MediaType.APPLICATION_JSON)
         )
         .andExpect(status().isOk())
@@ -117,6 +118,7 @@ public class ItemControllerGetTest {
         
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room.getHostKey().toString())
             // statusが小文字で絞り込んで確認する
             .param("status","accepted")
         )
@@ -143,6 +145,7 @@ public class ItemControllerGetTest {
 
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room.getHostKey().toString())
             .param("participantId", participant1.getId().toString())
         )
         .andExpect(status().isOk())
@@ -182,11 +185,15 @@ public class ItemControllerGetTest {
 
     @Test // 3.Statusが不正な値の場合
     void getItemsInvalidStatusType() throws Exception {
-        UUID roomId = UUID.randomUUID();
+        // ルームの存在（404）と認証（403）を通過させて、クエリの型の判定まで進める
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
         String invalidStatus = "FOO";
 
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room.getHostKey().toString())
             .param("status", invalidStatus)
         )
         .andExpect(status().isBadRequest())
@@ -197,11 +204,15 @@ public class ItemControllerGetTest {
 
     @Test // 4.participantIdの型が不一致の場合
     void getItemsInvalidParticipantIdType() throws Exception {
-        UUID roomId = UUID.randomUUID();
+        // ルームの存在（404）と認証（403）を通過させて、クエリの型の判定まで進める
+        Room room = new Room("テストルーム");
+        roomRepository.save(room);
+        UUID roomId = room.getId();
         String participantId = "1d3afab3-8537-4275-afaa-c4268211a2xx";
 
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room.getHostKey().toString())
             .param("participantId", participantId)
         )
         .andExpect(status().isBadRequest())
@@ -219,6 +230,7 @@ public class ItemControllerGetTest {
 
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room.getHostKey().toString())
         )
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isEmpty());
@@ -244,6 +256,7 @@ public class ItemControllerGetTest {
 
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room.getHostKey().toString())
             .param("participantId", fakeParticipantId.toString())
         )
         .andExpect(status().isNotFound())
@@ -268,6 +281,7 @@ public class ItemControllerGetTest {
 
         mockMvc.perform(
             get("/api/rooms/{roomId}/items", roomId)
+            .header("X-Host-Key", room2.getHostKey().toString())
             .param("participantId", participantId.toString())
         )
         .andExpect(status().isNotFound())

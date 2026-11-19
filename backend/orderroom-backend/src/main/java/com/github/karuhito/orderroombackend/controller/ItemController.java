@@ -51,7 +51,7 @@ public class ItemController {
     }
 
     @GetMapping // ルームのアイテムを一覧で取得
-    public ResponseEntity<List<ItemListResponse>> getItems(@PathVariable UUID roomId, @RequestParam(required = false)ItemStatus status, @RequestParam(required = false)UUID participantId) {
+    public ResponseEntity<List<ItemListResponse>> getItems(@PathVariable UUID roomId, @CurrentOperator Operator operator, @RequestParam(required = false)ItemStatus status, @RequestParam(required = false)UUID participantId) {
         List<ItemListResponse> response = itemService.getItems(roomId, status, participantId);
         return ResponseEntity.status(200).body(response);
     }

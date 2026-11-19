@@ -214,6 +214,7 @@ public class RoomControllerTest {
 
                 mockMvc.perform(
                                 get("/api/rooms/{roomId}/summary", roomId)
+                                                .header("X-Host-Key", room.getHostKey().toString())
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.acceptedTotalPrice").value(800))
@@ -274,6 +275,7 @@ public class RoomControllerTest {
 
                 mockMvc.perform(
                                 get("/api/rooms/{roomId}/summary", roomId)
+                                                .header("X-Host-Key", room.getHostKey().toString())
 
                 )
                                 .andExpect(status().isOk())
@@ -314,6 +316,7 @@ public class RoomControllerTest {
 
                 mockMvc.perform(
                                 get("/api/rooms/{roomId}/summary", roomId)
+                                                .header("X-Host-Key", room.getHostKey().toString())
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.budgetAmount").value(1000))
@@ -346,6 +349,7 @@ public class RoomControllerTest {
 
                 mockMvc.perform(
                                 get("/api/rooms/{roomId}/summary", roomId)
+                                                .header("X-Host-Key", room.getHostKey().toString())
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.budgetAmount").value(1000))
@@ -378,6 +382,7 @@ public class RoomControllerTest {
 
                 mockMvc.perform(
                                 get("/api/rooms/{roomId}/summary", roomId)
+                                                .header("X-Host-Key", room.getHostKey().toString())
                                                 .contentType(MediaType.APPLICATION_JSON))
                                 .andExpect(status().isOk())
                                 // overBudgetAmountが100になることを確認

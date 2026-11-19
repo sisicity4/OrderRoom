@@ -212,6 +212,7 @@ stateDiagram-v2
 - tokenまたはhostKeyの欠如・不一致: 403
 - ルーム、参加者、商品、精算の不存在: 404
 - 他ルームのIDを組み合わせた操作: 404または403で統一し、存在確認へ利用できないようにする
+- 参加者tokenまたはhostKeyで認証するAPI（`X-Participant-Token`と`X-Host-Key`のどちらでもよいもの）は、ルームの存在を認証より先に確かめる。存在しないルームは、ヘッダの種類や有無に関係なく404 `ROOM_NOT_FOUND`（#101）。ルームの存在は公開の`GET /api/rooms/{roomId}`でも分かるので、認証付きのAPIで隠す意味はないと判断した。
 
 ## 5. API共通仕様
 
@@ -284,7 +285,7 @@ stateDiagram-v2
 - `GET /api/rooms/{roomId}`は未実装。Controller/Serviceに接続されたルーム情報取得APIは存在しない。
 - Roomの`budgetAmount`と予算差分は未実装。
 - `X-Participant-Token`による商品作成者の特定は未実装。
-- `GET /api/rooms/{roomId}/items`、`GET /api/rooms/{roomId}/summary`、`GET /api/rooms/{roomId}/participants`は、確定仕様では参加者またはホスト認証を想定しているが、現実装では認証ヘッダを検証していない。
+- `GET /api/rooms/{roomId}/items`、`GET /api/rooms/{roomId}/summary`、`GET /api/rooms/{roomId}/participants`の参加者またはホスト認証は実装済み（#101）。
 - 商品編集・削除は未実装（Issue #34）。
 - 集計APIはaccepted合計、proposed補助合計、予算差分を分けて返していない。
 - 現行実装のsummaryレスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、7.9の確定仕様とは互換性がない。
@@ -473,6 +474,10 @@ Header: `X-Participant-Token`
 
 ### 7.5 GET `/api/rooms/{roomId}/items`
 
+Header: `X-Participant-Token`または`X-Host-Key`。両方ある場合は`X-Host-Key`を優先する。
+
+チェックは、`roomId`の形式（400 `TYPE_MISMATCH`）→ ルームの存在（404 `ROOM_NOT_FOUND`）→ 認証（403 `FORBIDDEN`。ヘッダなし、不正な値、別ルームのtoken・キー）→ Queryの形式（400 `TYPE_MISMATCH`）の順に行う。7.9、7.10も同じ順。
+
 Query:
 
 - `status=proposed|accepted|rejected`
@@ -503,7 +508,7 @@ Query:
 - status、purchased、actualPrice、paidByParticipantIdはこのAPIで変更しない
 - 編集キャンセルはFE内で処理し、保存リクエストを送らない
 - 精算済みの送金案が1件以上あるルームでは、編集・削除（DELETE `/api/rooms/{roomId}/items/{itemId}`）とも409 `CONFLICT`（8.4）
-- 編集・削除のチェックは、認証（403）→ 入力形式（400、編集のみ）→ 商品の存在（404 `ITEM_NOT_FOUND`）→ 操作権限（403。提案者本人かホスト）→ 精算済み（409）の順に行う。権限のない参加者には、精算済みかどうかにかかわらず403を返す
+- 編集・削除のチェックは、ルームの存在（404 `ROOM_NOT_FOUND`）→ 認証（403）→ 入力形式（400、編集のみ）→ 商品の存在（404 `ITEM_NOT_FOUND`）→ 操作権限（403。提案者本人かホスト）→ 精算済み（409）の順に行う。権限のない参加者には、精算済みかどうかにかかわらず403を返す
 
 ### 7.7 PATCH status・purchased
 
@@ -595,6 +600,9 @@ actualPriceは単価ではなく、この商品行全体の実支払額である
 - 商品一覧（7.5）のレスポンスには、`actualPrice`と購入者は含まれない。登録済みの購入詳細は、このAPIのレスポンスでだけ確認できる。
 
 ### 7.9 GET `/api/rooms/{roomId}/summary`
+
+Header: `X-Participant-Token`または`X-Host-Key`。チェックの順は7.5と同じ。
+
 現行実装差分: 2026-08-03時点の実装レスポンスは`totalPrice`、`participantSummaries`、`itemNameSummaries`のみであり、accepted/proposed別集計、予算差分、byStatus、acceptedItemCount、estimatedTotalPriceは未実装。
 
 ```json
@@ -649,7 +657,7 @@ Response 200。参加登録順（createdAt昇順）の配列で返す。tokenは
 - 実在しないroomIdは404 `ROOM_NOT_FOUND`
 - roomIdがUUID形式でない場合は400 `TYPE_MISMATCH`
 - createdAtは精算の端数配分（8.2）で参加登録順を決めるためにも使う
-- 権限は6.1のとおり参加者またはホストだが、現実装は認証ヘッダを検証していない（5.3、Issue #101）
+- Header: `X-Participant-Token`または`X-Host-Key`（6.1のとおり参加者またはホスト）。チェックの順は7.5と同じ
 
 ### 7.11 GET `/api/rooms/{roomId}/settlement`、POST `/api/rooms/{roomId}/settlement/recalculate`
 
@@ -694,11 +702,11 @@ GET `/settlement`:
 | 順 | 内容 | 失敗時 |
 | --- | --- | --- |
 | 1 | `roomId`の形式 | 400 `TYPE_MISMATCH` |
-| 2 | 認証（参加者tokenまたはホストキー） | 403 `FORBIDDEN` |
-| 3 | ルームの存在（ホストキーで認証した場合） | 404 `ROOM_NOT_FOUND` |
+| 2 | ルームの存在 | 404 `ROOM_NOT_FOUND` |
+| 3 | 認証（参加者tokenまたはホストキー） | 403 `FORBIDDEN` |
 | 4 | 計算してレスポンスを組み立てる（対象者が0人なら`members`と`transfers`を空にする） | 200 |
 
-- 参加者tokenで認証する場合は、tokenと`roomId`の組で検証する。別ルームのtokenと、存在しないルームのtokenは、どちらも403になり、ルームの存在確認には使えない。
+- 参加者tokenで認証する場合は、tokenと`roomId`の組で検証する。別ルームのtokenは403。存在しないルームは、ヘッダに関係なく404（4.4、#101）。
 - `members`は取得のたびに計算し、`transfers`は保存済みをそのまま返す（6.3）。食い違いうるため、購入情報や対象者を変更したあとは、再計算を呼ぶ。
 - 精算対象外の参加者が購入者になっている場合は、`members`に含める。負担額は0、立替額は数える。目印は付けない。余りの配分（8.2）は精算対象者の中だけで行う。
 - 再計算は精算済みが1件以上あると409になるため、再計算のレスポンスの`locked`は常に`false`になる。
@@ -724,15 +732,15 @@ Header: `X-Participant-Token`（支払側本人）または`X-Host-Key`。両方
 | 順 | 内容 | 失敗時 |
 | --- | --- | --- |
 | 1 | `roomId`、`settlementId`の形式 | 400 `TYPE_MISMATCH` |
-| 2 | 認証（参加者tokenまたはホストキー。別ルームのtoken・キーを含む） | 403 `FORBIDDEN` |
-| 3 | ルームの存在（ホストキーで認証した場合） | 404 `ROOM_NOT_FOUND` |
+| 2 | ルームの存在 | 404 `ROOM_NOT_FOUND` |
+| 3 | 認証（参加者tokenまたはホストキー。別ルームのtoken・キーを含む） | 403 `FORBIDDEN` |
 | 4 | 入力形式（`settled`が未指定・null） | 400 `VALID_ERROR`。`fields.settled` |
 | 4 | 入力形式（`settled`が真偽値でない） | 400 `TYPE_MISMATCH`。`fields.settled` |
 | 5 | 送金案の存在（別ルームの送金案を含む） | 404 `SETTLEMENT_NOT_FOUND` |
 | 6 | 支払側本人かホストか（受取側、第三者の参加者は不可） | 403 `FORBIDDEN` |
 | 7 | 更新 | 200 |
 
-- 認証（2）は入力形式（4）より先に行う。認証なしで本文も不正なリクエストは403になる。
+- 認証（3）は入力形式（4）より先に行う。認証なしで本文も不正なリクエストは403になる。
 - このAPIは精算済みの記録そのものなので、8.4の変更ロック（409）の対象外。
 
 ### 7.13 POST `/api/rooms/{roomId}/settlement/reset`
