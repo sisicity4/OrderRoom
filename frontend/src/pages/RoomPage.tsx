@@ -12,6 +12,14 @@ type Proposal = {
   purchased: boolean;
 };
 
+type Summary = {
+  acceptedTotalPrice: number;
+  proposedTotalPrice: number;
+  budgetAmount: number | null;
+  remainingBudget: number | null;
+  overBudgetAmount: number | null;
+};
+
 const statusLabel: Record<string, string> = {
   proposed: '提案中',
   accepted: '採用',
@@ -49,8 +57,8 @@ function RoomPage() {
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
   const [budgetAmount, setBudgetAmount] = useState<number | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
 
-  const total = list.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const stored = localStorage.getItem(`participant:${roomId}`);
@@ -91,6 +99,24 @@ function RoomPage() {
     }
   };
 
+  const fetchSummary = async () => {
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/summary`, {
+        headers: {
+          'X-Participant-Token': token ?? '',
+        },
+      });
+      if (!res.ok) {
+        setError("集計の取得に失敗しました。");
+        return;
+      }
+      const data = await res.json();
+      setSummary(data);
+    } catch {
+      setError("通信に失敗しました。");
+    }
+  };
+
   const deleteItem = async (itemId: string) => {
     try {
       const res = await fetch(`/api/rooms/${roomId}/items/${itemId}`, {
@@ -104,6 +130,7 @@ function RoomPage() {
         return;
       }
       await fetchItems();
+      await fetchSummary();
       setError('');
     } catch {
       setError("通信に失敗しました。");
@@ -153,6 +180,7 @@ function RoomPage() {
         return;
       }
       await fetchItems();
+      await fetchSummary();
       setSelectedId(null);
     } catch {
       setSheetError("通信に失敗しました。");
@@ -164,6 +192,7 @@ function RoomPage() {
   useEffect(() => {
     fetchRoom();
     fetchItems();
+    fetchSummary();
   }, [roomId]);
 
   if (!token) {
@@ -199,15 +228,29 @@ function RoomPage() {
         </p>
       </div>
 
+      {summary && summary.budgetAmount !== null && (
+        summary.overBudgetAmount !== null && summary.overBudgetAmount > 0 ? (
+          <div className='flex border-2 border-red-700 text-red-700 font-bold px-2 py-1'>
+            <p className='shrink-0'>予算超過</p>
+            <p className='ml-auto tracking-[0.2em]'>{summary.overBudgetAmount}円</p>
+          </div>
+        ) : (
+          <div className='flex'>
+            <p className='border px-2 w-fit shrink-0'>残り</p>
+            <p className='border-b-2 border-neutral-700 ml-1.5 w-full min-w-0'>{summary.remainingBudget}円</p>
+          </div>
+        )
+      )}
 
       <hr className='border-t-5' />
 
-
-
-      <div className='flex'>
-        <p className='border w-fit px-2 shrink-0'>提案</p>
-        <p className='border ml-auto px-2 shrink-0'>合計</p>
-        <p className='border-b ml-2 tracking-[0.2em] shrink-0'>{total}円</p>
+      <div className='flex flex-col'>
+        <div className='flex'>
+          <p className='border w-fit px-2 shrink-0'>提案</p>
+          <p className='border ml-auto px-2 shrink-0'>採用の合計</p>
+          <p className='border-b ml-2 tracking-[0.2em] shrink-0'>{summary?.acceptedTotalPrice ?? 0}円</p>
+        </div>
+        <p className='text-sm text-[#7A6B57] text-right mt-1'>提案中 {summary?.proposedTotalPrice ?? 0}円（採用されると合計に入ります）</p>
       </div>
       <ul className='flex flex-col gap-2'>
         {list.map((item) => (
@@ -295,6 +338,7 @@ function RoomPage() {
             return;
           }
           await fetchItems();
+          await fetchSummary();
           setName('');
           setPrice('');
           setQuantity('');
