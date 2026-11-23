@@ -164,7 +164,8 @@ public class RoomControllerTest {
         }
 
         @ParameterizedTest // 異常系: 作成者の名前（hostName）が空・空白のみ（#141）
-        @ValueSource(strings = { "", " " })
+        // @NotBlank は String.isBlank() で判定するので、全角スペース（U+3000）だけでも400になる
+        @ValueSource(strings = { "", " ", "　" })
         void createRoomBlankHostNameTest(String hostName) throws Exception {
                 CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, null, hostName);
 
