@@ -113,7 +113,7 @@ erDiagram
 | `participant_id` | UUID | FK、複合PK | 精算対象者 |
 | `created_at` | TIMESTAMPTZ | NOT NULL | 登録日時 |
 
-初回計算時に未設定なら全参加者を対象とする。対象者0人は許可しない。
+初回計算時に未設定なら全参加者を対象とする。対象者0人は許可しない。ルームの作成者（幹事）も作成時に参加者として登録される（7.1）ため、未設定なら幹事も対象に含まれる。幹事を対象から外す場合は、精算対象者を保存する。
 
 ### 2.5 settlements
 
@@ -156,7 +156,7 @@ stateDiagram-v2
 
 ### 4.1 参加者token
 
-- 参加APIの成功時に一度だけ返す
+- 参加APIの成功時に一度だけ返す。ルームの作成者の分は、ルーム作成APIの成功時に一度だけ返す（7.1）
 - FEは `orderroom.participantToken.{roomId}` のようにroom単位でlocalStorageへ保存する
 - 商品作成、編集、削除、参加者本人の精算済み操作で送る
 - 幹事が参加者として提案する場合も、幹事自身のparticipant tokenを使って提案者を特定する
@@ -203,8 +203,8 @@ stateDiagram-v2
 
 補足:
 
-- 商品提案の作成者はparticipant tokenから決定するため、幹事も提案するには参加者登録が必要。
-- 幹事が参加者として登録しても、hostKeyによる管理者権限は失わない。
+- 商品提案の作成者はparticipant tokenから決定する。幹事はルーム作成時に参加者としても登録され、participant tokenを受け取る（7.1）ため、参加APIを別に呼ばずに提案できる。
+- 幹事が参加者として登録されていても、hostKeyによる管理者権限は失わない。
 - hostKeyはparticipant tokenの代替ではない。participant tokenはhostKeyの代替ではない。
 
 ### 4.4 エラー
@@ -402,11 +402,15 @@ Request:
   "title": "キャンプ",
   "eventDate": "2026-08-01",
   "memo": "駅前で買い出し",
-  "budgetAmount": 12000
+  "budgetAmount": 12000,
+  "hostName": "花子"
 }
 ```
 
-Response 201。hostKeyはこの応答だけで返す。
+- `hostName`: ルームの作成者（幹事）の表示名。必須、50字以内。未指定・空文字・空白だけの場合は400 `VALID_ERROR`（`fields.hostName`）
+- ルームの作成と同時に、作成者を`hostName`の名前で参加者として登録する（#141）。ルームと参加者は同じトランザクションで保存し、参加者の保存に失敗した場合はルームも保存しない
+
+Response 201。hostKeyと作成者のparticipant tokenは、この応答だけで返す。
 
 ```json
 {
@@ -418,9 +422,17 @@ Response 201。hostKeyはこの応答だけで返す。
   "hostKey": "9f13...",
   "participantUrl": "https://app.example.com/rooms/b7e2...",
   "hostUrl": "https://app.example.com/rooms/b7e2.../host?key=9f13...",
-  "createdAt": "2026-07-18T12:00:00Z"
+  "createdAt": "2026-07-18T12:00:00Z",
+  "participant": {
+    "id": "4c8d...",
+    "name": "花子",
+    "token": "a1b2..."
+  }
 }
 ```
+
+- `participant`: 作成者の参加者情報。`token`は参加API（7.3）の`token`と同じく`X-Participant-Token`で使う
+- FEは`participant:{roomId}`に`{ id, token }`を保存する（参加APIと同じ形）。これにより、作成者は参加APIを呼ばずにルーム画面で提案できる
 
 ### 7.2 GET `/api/rooms/{roomId}`
 
@@ -910,8 +922,9 @@ MVP期間は `ddl-auto=update` を暫定利用する。v1.0後にFlywayを導入
 - ルーム作成、参加、商品権限、状態遷移、集計、精算をテストする
 - 他ルームのtoken、hostKey、participantIdを拒否する
 - participant tokenとhostKeyがレスポンスやログへ漏れない
-- 幹事が参加者として登録し、自分の提案を追加できる
-- 幹事は参加者として登録しても、採用、今回は見送る、提案中に戻す、購入済み変更の管理操作ができる
+- 幹事がルーム作成時に参加者として登録され、参加APIを呼ばずに自分の提案を追加できる
+- 参加者の登録に失敗した場合、ルームも作成されない
+- 幹事は参加者として登録されていても、採用、今回は見送る、提案中に戻す、購入済み変更の管理操作ができる
 - 提案者本人、幹事、第三者の3パターンで編集・削除権限を確認する
 - 第三者は他人の提案を編集・削除できない
 - 編集対象がname、price、quantity、memoに限定されている
@@ -919,7 +932,7 @@ MVP期間は `ddl-auto=update` を暫定利用する。v1.0後にFlywayを導入
 - 編集、削除、採用、見送り、提案中へ戻す、購入状態変更後にsummaryが正しく更新される
 - 予算未設定、0円、超過を確認する
 - `npm run lint`、`npm run build`、バックエンドテストがすべて成功する
-- ローカル起動で、幹事作成 → 幹事参加 → 提案追加 → 編集 → 採用 → 購入済み → 削除までを確認する
+- ローカル起動で、幹事作成（参加者登録を含む） → 提案追加 → 編集 → 採用 → 購入済み → 削除までを確認する
 - 1円、割り切れない合計、複数購入者、対象者1人を確認する
 - 精算済み後の変更ロックとresetを確認する
 - 本番でHealth API、DB接続、CORS、SPA直接アクセスを確認する
