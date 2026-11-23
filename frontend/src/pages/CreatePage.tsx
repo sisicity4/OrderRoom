@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 function CreatePage() {
   const [title, setTitle] = useState('');
+  const [hostName, setHostName] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [memo, setMemo] = useState('');
   const [budgetAmount, setBudgetAmount] = useState('');
@@ -15,6 +16,11 @@ function CreatePage() {
   const handleCreate = async () => {
     if (title.trim() === '') {
       setError('ルーム名を入力してください。');
+      return;
+    }
+    // hostNameのバリデーションチェック
+    if (hostName.trim() === '') {
+      setError('ホスト名を入力してください。');
       return;
     }
     const budget = budgetAmount.trim();
@@ -30,6 +36,7 @@ function CreatePage() {
         eventDate: eventDate === '' ? null : eventDate,
         memo,
         budgetAmount: budget === '' ? null : Number(budget),
+        hostName,
       }),
     });
     if (!res.ok) {
@@ -38,6 +45,8 @@ function CreatePage() {
     }
     const data = await res.json();
     localStorage.setItem(`host:${data.id}`, data.hostKey);
+    // 作成者の参加者情報をparticipant:<roomId> に保存する
+    localStorage.setItem(`participant:${data.id}`, JSON.stringify({ id: data.participant.id, token: data.participant.token }));
     setId(data.id);
     setParticipantUrl(data.participantUrl);
     setHostKey(data.hostKey);
@@ -71,6 +80,17 @@ function CreatePage() {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+      <div className='flex'>
+        <p className='border px-2 shrink-0 '>ホスト名</p>
+        <input
+          className='border-b-2 ml-1.5 border-neutral-700 outline-none w-full min-w-0'
+          placeholder='あなたの名前を入力'
+          type="text"
+          maxLength={50}
+          value={hostName}
+          onChange={(e) => setHostName(e.target.value)}
         />
       </div>
       <div className='flex'>
