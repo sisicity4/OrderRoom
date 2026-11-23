@@ -1,6 +1,8 @@
 package com.github.karuhito.orderroombackend.controller;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,12 +16,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.github.karuhito.orderroombackend.TestcontainersConfiguration;
+import com.github.karuhito.orderroombackend.dto.CreateItemRequest;
 import com.github.karuhito.orderroombackend.dto.CreateRoomRequest;
+import com.jayway.jsonpath.JsonPath;
 import com.github.karuhito.orderroombackend.entity.Item;
 import com.github.karuhito.orderroombackend.entity.ItemStatus;
 import com.github.karuhito.orderroombackend.entity.Participant;
@@ -54,7 +61,7 @@ public class RoomControllerTest {
         @Test // 正常系
         void createRoomTest() throws Exception {
                 // リクエストDTOを組み立てる
-                CreateRoomRequest request = new CreateRoomRequest("testTitle", null, null, null);
+                CreateRoomRequest request = new CreateRoomRequest("testTitle", null, null, null, "幹事");
 
                 // mockMvcでPOSTリクエストを送る
                 mockMvc.perform(
@@ -71,7 +78,7 @@ public class RoomControllerTest {
         @Test // 異常系: 入力値が不正
         void createRoomValidTest() throws Exception {
                 // 全てnull
-                CreateRoomRequest request = new CreateRoomRequest(null, null, null, null);
+                CreateRoomRequest request = new CreateRoomRequest(null, null, null, null, null);
 
                 mockMvc.perform(
                                 post("/api/rooms")
@@ -85,7 +92,7 @@ public class RoomControllerTest {
 
         @Test // 正常系 budgetAmountを指定できる
         void createRoomWithBudgetAmountTest() throws Exception {
-                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 12000);
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 12000, "幹事");
 
                 mockMvc.perform(
                                 post("/api/rooms")
@@ -99,7 +106,7 @@ public class RoomControllerTest {
 
         @Test // 正常系 budgetAmountが0のパターン
         void createRoomZeroBudgetAmountTest() throws Exception {
-                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 0);
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, 0, "幹事");
 
                 mockMvc.perform(
                                 post("/api/rooms")
@@ -113,7 +120,7 @@ public class RoomControllerTest {
 
         @Test // 異常系: budgetAmountが負の数値
         void createRoomInValidBudgetAmountTest() throws Exception {
-                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, -1);
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, -1, "幹事");
 
                 mockMvc.perform(
                                 post("/api/rooms")
@@ -129,7 +136,7 @@ public class RoomControllerTest {
         void createRoomValidTitleTest() throws Exception {
 
                 String title = "A".repeat(100);
-                CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000);
+                CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000, "幹事");
 
                 mockMvc.perform(
                         post("/api/rooms")
@@ -144,7 +151,7 @@ public class RoomControllerTest {
         @Test // 異常系: roomのtitleの長さが101文字の場合
         void createRoomInvalidTitleTest() throws Exception {
                 String title = "A".repeat(101);
-                CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000);
+                CreateRoomRequest request = new CreateRoomRequest(title, null, null, 1000, "幹事");
 
                 mockMvc.perform(
                                 post("/api/rooms")
@@ -154,6 +161,136 @@ public class RoomControllerTest {
                                 .andExpect(jsonPath("$.error").value("VALID_ERROR"))
                                 .andExpect(jsonPath("$.message").value("不正な入力です"))
                                 .andExpect(jsonPath("$.fields.title").value("タイトルは100字以内で入力してください"));
+        }
+
+        @ParameterizedTest // 異常系: 作成者の名前（hostName）が空・空白のみ（#141）
+        @ValueSource(strings = { "", " " })
+        void createRoomBlankHostNameTest(String hostName) throws Exception {
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, null, hostName);
+
+                mockMvc.perform(
+                                post("/api/rooms")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("VALID_ERROR"))
+                                .andExpect(jsonPath("$.fields.hostName").exists());
+        }
+
+        @Test // 異常系: 作成者の名前（hostName）がない（#141）
+        void createRoomWithoutHostNameTest() throws Exception {
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, null, null);
+
+                mockMvc.perform(
+                                post("/api/rooms")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("VALID_ERROR"))
+                                .andExpect(jsonPath("$.fields.hostName").exists());
+        }
+
+        @Test // 正常系: 作成者の名前（hostName）が最大の50字（#141）
+        void createRoomMaxHostNameTest() throws Exception {
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, null, "あ".repeat(50));
+
+                mockMvc.perform(
+                                post("/api/rooms")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated());
+        }
+
+        @Test // 異常系: 作成者の名前（hostName）が51字（#141）
+        void createRoomTooLongHostNameTest() throws Exception {
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, null, "あ".repeat(51));
+
+                mockMvc.perform(
+                                post("/api/rooms")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value("VALID_ERROR"))
+                                .andExpect(jsonPath("$.fields.hostName").value("名前は50字以内で入力してください"));
+        }
+
+        @Test // 正常系: 作成者が参加者として登録され、レスポンスに participant が入る（#141）
+        void createRoomRegistersHostAsParticipantTest() throws Exception {
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, null, "幹事");
+
+                String body = mockMvc.perform(
+                                post("/api/rooms")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.participant.id").exists())
+                                .andExpect(jsonPath("$.participant.name").value("幹事"))
+                                .andExpect(jsonPath("$.participant.token").exists())
+                                .andReturn().getResponse().getContentAsString();
+
+                UUID roomId = UUID.fromString(JsonPath.read(body, "$.id"));
+                String participantId = JsonPath.read(body, "$.participant.id");
+                String token = JsonPath.read(body, "$.participant.token");
+                String hostKey = JsonPath.read(body, "$.hostKey");
+
+                // 参加者の token と hostKey は別の値
+                assertThat(token).isNotEqualTo(hostKey);
+
+                // DB にはこのルームの参加者として作成者だけがいる
+                List<Participant> participants = participantRepository.findByRoomIdOrderByCreatedAtAsc(roomId);
+                assertThat(participants)
+                                .extracting(p -> p.getId().toString(), Participant::getName, p -> p.getToken().toString())
+                                .containsExactly(tuple(participantId, "幹事", token));
+        }
+
+        @Test // 正常系: 作成者は /join を通らずに、返された token で提案でき、参加者一覧にも出る（#141）
+        void hostCanProposeAndIsListedWithoutJoinTest() throws Exception {
+                CreateRoomRequest request = new CreateRoomRequest("テストルーム", null, null, null, "幹事");
+
+                String body = mockMvc.perform(
+                                post("/api/rooms")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andReturn().getResponse().getContentAsString();
+
+                String roomId = JsonPath.read(body, "$.id");
+                String participantId = JsonPath.read(body, "$.participant.id");
+                String token = JsonPath.read(body, "$.participant.token");
+                String hostKey = JsonPath.read(body, "$.hostKey");
+
+                // 返された token で提案できる
+                CreateItemRequest item = new CreateItemRequest("お茶", 150, 2, null);
+                mockMvc.perform(
+                                post("/api/rooms/{roomId}/items", roomId)
+                                                .header("X-Participant-Token", token)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(item)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.participantId").value(participantId));
+
+                // 商品一覧の提案者名（ルーム画面の「提案者: ○○」）が作成者の名前になる
+                mockMvc.perform(
+                                get("/api/rooms/{roomId}/items", roomId)
+                                                .header("X-Participant-Token", token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].participantId").value(participantId))
+                                .andExpect(jsonPath("$[0].participantName").value("幹事"));
+
+                // 参加者一覧に作成者が出る（参加者・ホストのどちらの認証でも）
+                mockMvc.perform(
+                                get("/api/rooms/{roomId}/participants", roomId)
+                                                .header("X-Participant-Token", token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.length()").value(1))
+                                .andExpect(jsonPath("$[0].id").value(participantId))
+                                .andExpect(jsonPath("$[0].name").value("幹事"));
+
+                mockMvc.perform(
+                                get("/api/rooms/{roomId}/participants", roomId)
+                                                .header("X-Host-Key", hostKey))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].name").value("幹事"));
         }
 
         // アイテム集計のテスト

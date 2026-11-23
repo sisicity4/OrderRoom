@@ -15,6 +15,10 @@ public record CreateRoomRequest(
     String memo,
 
     @Min(value = 0, message = "予算上限をマイナスに設定することはできません")
-    Integer budgetAmount
+    Integer budgetAmount,
+
+    @NotBlank
+    @Size(max = 50, message = "名前は50字以内で入力してください")
+    String hostName
 ) {
 }
